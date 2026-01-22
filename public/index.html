@@ -26,7 +26,8 @@
   <body>
     <h2>קטלוג בסיסי — הממשק אצלך, הקבצים נשארים ב־GitHub</h2>
     <div class="muted">
-      טוען metadata, משלים נתיבים מתוך files_manifest, ואז פותח דרך <code>/lib/...</code>.
+      טוען metadata, טוען files_manifest, בונה מפת התאמות (hash→path וגם שם-קובץ→path),
+      ואז מאפשר פתיחה דרך <code>/lib/...</code>.
     </div>
 
     <div class="row toolbar">
@@ -34,10 +35,12 @@
       <button onclick="scrollToResults()">לתוצאות</button>
       <button onclick="openPath()">פתח נתיב ידני</button>
       <button onclick="ping()">בדיקה: /api/ping</button>
+
       <label class="pill">
         <input id="showAll" type="checkbox" onchange="applySearch()" />
         הצג גם פריטים בלי קובץ
       </label>
+
       <span id="status" class="pill">לא נטען</span>
     </div>
 
@@ -68,6 +71,10 @@
 
       function setStatus(text) {
         document.getElementById("status").textContent = text
+      }
+
+      function tick() {
+        return new Promise(r => setTimeout(r, 0))
       }
 
       function scrollToResults() {
@@ -111,12 +118,12 @@
 
       function openItem(it) {
         if (!it.path) {
+          // מציג דיבאג מינימלי (בלי להפיל אותך לתוך קונסול)
+          const dbg = it._dbg ? it._dbg.slice(0, 20).join("\n") : ""
           alert(
-            "אין נתיב לפתיחה עבור פריט זה.\n" +
-            "נסה לסמן 'הצג גם פריטים בלי קובץ' כדי לראות מה מגיע.\n\n" +
-            "דיבאג קצר:\n" +
-            "id: " + (it.id || "") + "\n" +
-            "_key: " + (it._key || "")
+            "אין נתיב לפתיחה עבור פריט זה.\n\n" +
+            "דיבאג (ערכים שזוהו מתוך metadata):\n" +
+            (dbg ? dbg : "(לא זוהו ערכים שימושיים)")
           )
           return
         }
@@ -137,19 +144,13 @@
           .replaceAll("'", "&#039;")
       }
 
-      function tick() {
-        return new Promise(r => setTimeout(r, 0))
-      }
-
       // ---------- זיהויים
 
       function looksLikePath(s) {
-        const x = String(s || "")
+        const x = String(s || "").trim()
         if (!x) return false
         if (x.includes("://")) return true
-        // נתיב צריך לפחות "/" + סיומת
         if ((x.includes("/") || x.includes("\\")) && /\.[a-z0-9]{2,6}$/i.test(x)) return true
-        // סיומות שכיחות (גם בלי "/" - למקרים כמו "metadata.json")
         if (/\.(pdf|txt|docx|json|zip|md)$/i.test(x)) return true
         return false
       }
@@ -157,13 +158,42 @@
       function looksLikeHashish(s) {
         const x = String(s || "").trim()
         if (!x) return false
-        // md5/sha1/sha256 או דומה
         if (/^[0-9a-f]{32}$/i.test(x)) return true
         if (/^[0-9a-f]{40}$/i.test(x)) return true
         if (/^[0-9a-f]{64}$/i.test(x)) return true
-        // לפעמים יש prefix כמו "sha1:<hex>"
         if (/^(sha1|sha256|md5):[0-9a-f]{16,64}$/i.test(x)) return true
         return false
+      }
+
+      function normHashish(s) {
+        const x = String(s || "").trim()
+        if (!x) return ""
+        const m = x.match(/^(sha1|sha256|md5):(.+)$/i)
+        return (m && m[2] ? m[2] : x).toLowerCase()
+      }
+
+      function basenameOf(p) {
+        const x = String(p || "").trim()
+        if (!x) return ""
+        const s = x.replaceAll("\\", "/")
+        const parts = s.split("/")
+        return (parts[parts.length - 1] || "").trim()
+      }
+
+      function stemOfFilename(fn) {
+        const x = String(fn || "").trim()
+        if (!x) return ""
+        return x.replace(/\.[a-z0-9]{2,6}$/i, "")
+      }
+
+      function normalizeTextKey(s) {
+        // לניסיון התאמה "כותרת -> שם קובץ"
+        return String(s || "")
+          .toLowerCase()
+          .replace(/[\u0590-\u05FF]/g, (ch) => ch) // שומר עברית כמו שהיא
+          .replace(/[^\p{L}\p{N}]+/gu, " ")        // כל לא-אות/מספר -> רווח
+          .trim()
+          .replace(/\s+/g, " ")
       }
 
       // ---------- טעינת JSON (מעדיף /api ואם אין אז /lib)
@@ -244,20 +274,28 @@
         return []
       }
 
+      function getAny(o, keys) {
+        for (const k of keys) {
+          if (o && Object.prototype.hasOwnProperty.call(o, k)) return o[k]
+        }
+        return undefined
+      }
+
       function normalizeMetaItem(x) {
         const o = (x && typeof x === "object") ? x : {}
 
         const titleVal =
-          o.title ?? o.name ?? o.he_title ?? o.heb_title ?? o.book ?? o.display ?? ""
+          getAny(o, ["title", "name", "he_title", "heb_title", "book", "display", "caption"]) ?? ""
 
         const authorVal =
-          o.author ?? o.authors ?? o.by ?? o.creator ?? o.writer ?? ""
+          getAny(o, ["author", "authors", "by", "creator", "writer", "mechaber"]) ?? ""
 
         const pathVal =
-          o.path ?? o.file ?? o.filename ?? o.relpath ?? o.uri ?? o.url ?? ""
+          getAny(o, ["path", "file", "filename", "relpath", "uri", "url", "href"]) ?? ""
 
         const idVal =
-          o.id ?? o.hash ?? o.sha ?? o.sha1 ?? o.sha256 ?? o.md5 ?? o.filehash ?? o._key ?? ""
+          getAny(o, ["id", "book_id", "bookId", "file_id", "fileId", "filehash", "hash", "sha", "sha1", "sha256", "md5", "uuid", "guid"]) ??
+          (o._key ?? "")
 
         const title = Array.isArray(titleVal) ? titleVal.join(" ") : titleVal
         const author = Array.isArray(authorVal) ? authorVal.join(", ") : authorVal
@@ -267,42 +305,62 @@
           title: String(title || "").trim(),
           author: String(author || "").trim(),
           path: String(path || "").trim(),
-          id: String(idVal || "").trim(),
+          id: String(idVal ?? "").trim(),
           _key: String(o._key || "").trim(),
-          _raw: o
+          _raw: o,
+          _dbg: []
         }
       }
 
-      function collectCandidateIds(meta) {
-        const out = new Set()
+      // ---------- סריקה עמוקה: אוספים כל מחרוזת שימושית מתוך metadata
 
-        const push = (v) => {
-          if (typeof v !== "string") return
-          const s = v.trim()
+      function deepCollectStrings(root, maxDepth = 5, maxItems = 250) {
+        const out = []
+        const seen = new Set()
+
+        function push(v) {
+          const s = String(v || "").trim()
           if (!s) return
           if (s.length > 500) return
-          out.add(s)
-          // גם בלי prefix אם יש
-          const m = s.match(/^(sha1|sha256|md5):(.+)$/i)
-          if (m && m[2]) out.add(m[2])
+          if (seen.has(s)) return
+          seen.add(s)
+          out.push(s)
         }
 
-        push(meta.path)
-        push(meta.id)
-        push(meta._key)
+        function walk(node, depth) {
+          if (out.length >= maxItems) return
+          if (depth > maxDepth) return
 
-        // חיפוש בעוד כמה שדות נפוצים מתוך _raw
-        const r = meta._raw || {}
-        const keys = ["file", "filename", "relpath", "uri", "url", "hash", "sha", "sha1", "sha256", "md5", "filehash"]
-        for (const k of keys) {
-          const v = r[k]
-          if (typeof v === "string") push(v)
+          if (node == null) return
+
+          const t = typeof node
+          if (t === "string" || t === "number" || t === "boolean") {
+            push(node)
+            return
+          }
+
+          if (Array.isArray(node)) {
+            for (let i = 0; i < node.length; i++) {
+              walk(node[i], depth + 1)
+              if (out.length >= maxItems) return
+            }
+            return
+          }
+
+          if (t === "object") {
+            for (const [k, v] of Object.entries(node)) {
+              push(k)
+              walk(v, depth + 1)
+              if (out.length >= maxItems) return
+            }
+          }
         }
 
-        return Array.from(out)
+        walk(root, 0)
+        return out
       }
 
-      // ---------- manifest -> anyId->path
+      // ---------- manifest: בונים מפות
 
       function extractManifestEntries(manifestJson) {
         if (!manifestJson || typeof manifestJson !== "object") return []
@@ -337,8 +395,10 @@
         return out
       }
 
-      async function buildAnyToPathMap(manifestJson, onProgress) {
-        const anyToPath = new Map()
+      async function buildManifestMaps(manifestJson, onProgress) {
+        const hashToPath = new Map()
+        const baseToPath = new Map()   // basename -> full path
+        const stemToPath = new Map()   // stem -> full path
         const entries = extractManifestEntries(manifestJson)
         const total = entries.length
 
@@ -347,30 +407,41 @@
           const kStr = String(k || "").trim()
           const vStrings = collectStringsFromValue(vRaw)
 
-          // מנסים להסיק "path" מהצד שנראה כמו נתיב
+          // קובעים מהו path (מהצד שנראה כמו נתיב)
           let path = ""
           if (looksLikePath(kStr)) {
             path = kStr
           } else {
             for (const s of vStrings) {
-              if (looksLikePath(s)) {
-                path = s
-                break
-              }
+              if (looksLikePath(s)) { path = s; break }
             }
           }
 
+          // ממפים:
+          // 1) hash -> path (משני הצדדים, אם נראה hashish)
           if (path) {
-            // ממפים גם את המפתח וגם כל מחרוזת שנמצאה לערך "path"
-            if (kStr) anyToPath.set(kStr, path)
-            for (const s of vStrings) anyToPath.set(s, path)
-          } else {
-            // גם אם לא זיהינו path, עדיין נשמור קשר בין key/value (לפעמים metadata מכיל key שמצביע ל-value אחר)
-            if (kStr && vStrings.length) {
-              for (const s of vStrings) {
-                if (!anyToPath.has(kStr)) anyToPath.set(kStr, s)
-                if (!anyToPath.has(s)) anyToPath.set(s, kStr)
+            const b = basenameOf(path).toLowerCase()
+            const st = stemOfFilename(b).toLowerCase()
+
+            if (b && !baseToPath.has(b)) baseToPath.set(b, path)
+            if (st && !stemToPath.has(st)) stemToPath.set(st, path)
+
+            if (looksLikeHashish(kStr)) {
+              const hk = normHashish(kStr)
+              if (hk && !hashToPath.has(hk)) hashToPath.set(hk, path)
+            }
+
+            for (const s of vStrings) {
+              if (looksLikeHashish(s)) {
+                const hv = normHashish(s)
+                if (hv && !hashToPath.has(hv)) hashToPath.set(hv, path)
               }
+
+              // גם אם metadata מחזיר רק basename
+              const bb = basenameOf(s).toLowerCase()
+              const sst = stemOfFilename(bb).toLowerCase()
+              if (bb && !baseToPath.has(bb) && looksLikePath(path)) baseToPath.set(bb, path)
+              if (sst && !stemToPath.has(sst) && looksLikePath(path)) stemToPath.set(sst, path)
             }
           }
 
@@ -381,21 +452,53 @@
         }
 
         if (onProgress) onProgress(total, total)
-        return anyToPath
+        return { hashToPath, baseToPath, stemToPath, total }
       }
 
-      function resolvePathFromMap(anyToPath, candidates) {
-        for (const c of candidates) {
-          if (anyToPath.has(c)) {
-            const p = anyToPath.get(c)
-            if (looksLikePath(p)) return p
-            // אם זה לא path, אולי זה קפיצה אחת עד path
-            if (anyToPath.has(p)) {
-              const p2 = anyToPath.get(p)
-              if (looksLikePath(p2)) return p2
-            }
-          }
+      function resolvePathForMeta(meta, maps) {
+        // 1) אם כבר יש path מפורש
+        if (looksLikePath(meta.path)) return meta.path
+
+        const dbg = []
+
+        // 2) מועמדים מתוך metadata (עמוק)
+        const strings = deepCollectStrings(meta._raw, 5, 220)
+        for (const s of strings) {
+          if (looksLikeHashish(s)) dbg.push("hash: " + s)
+          else if (looksLikePath(s)) dbg.push("pathish: " + s)
         }
+
+        // 2a) נסה hash -> path
+        for (const s of strings) {
+          if (!looksLikeHashish(s)) continue
+          const h = normHashish(s)
+          if (h && maps.hashToPath.has(h)) return maps.hashToPath.get(h)
+        }
+
+        // 2b) נסה basename -> path
+        for (const s of strings) {
+          const b = basenameOf(s).toLowerCase()
+          if (b && maps.baseToPath.has(b)) return maps.baseToPath.get(b)
+        }
+
+        // 2c) נסה stem -> path
+        for (const s of strings) {
+          const b = basenameOf(s).toLowerCase()
+          const st = stemOfFilename(b).toLowerCase()
+          if (st && maps.stemToPath.has(st)) return maps.stemToPath.get(st)
+        }
+
+        // 3) fallback: התאמה לפי כותרת (אם שמות קבצים דומים לכותרת)
+        const t = normalizeTextKey(meta.title)
+        if (t) {
+          const st = t.replace(/\s+/g, " ").trim()
+          const st2 = st.replaceAll(" ", "")
+          // מנסים כמה וריאציות מול stem map
+          if (maps.stemToPath.has(st)) return maps.stemToPath.get(st)
+          if (maps.stemToPath.has(st2)) return maps.stemToPath.get(st2)
+        }
+
+        meta._dbg = dbg
         return ""
       }
 
@@ -407,7 +510,7 @@
 
         for (let i = 0; i < total; i++) {
           const it = list[i]
-          const q = (it.title + " " + it.author + " " + it.path + " " + it.id + " " + it._key).toLowerCase()
+          const q = (it.title + " " + it.author + " " + it.path).toLowerCase()
           out.push({ ...it, q })
 
           if (i % 2000 === 0) {
@@ -480,9 +583,8 @@
 
           const rawMetaItems = extractBestCollection(metaJson)
           if (!rawMetaItems.length) {
-            console.log("metadata json (raw):", metaJson)
             setStatus("נטען metadata אבל לא זוהתה רשימה")
-            alert("נטען metadata.json אבל לא הצלחתי לחלץ ממנו רשימה. בדוק בקונסול (F12).")
+            alert("נטען metadata.json אבל לא הצלחתי לחלץ ממנו רשימה.")
             return
           }
 
@@ -497,53 +599,37 @@
           }
           setStatus(`מעבד metadata... (${rawMetaItems.length}/${rawMetaItems.length})`)
 
-          // בדיקה כמה פריטים כבר כוללים path
-          let alreadyPath = 0
-          for (let i = 0; i < normalized.length; i++) {
-            if (looksLikePath(normalized[i].path)) alreadyPath++
-          }
+          setStatus("טוען files_manifest...")
+          const manifestJson = await fetchJsonAny([
+            "/api/manifest",
+            "/lib/files_manifest.json"
+          ])
 
-          let anyToPath = null
+          setStatus("בונה מפות מה־manifest... (0/?)")
+          const maps = await buildManifestMaps(manifestJson, (done, total) => {
+            setStatus(`בונה מפות מה־manifest... (${done}/${total})`)
+          })
 
-          // אם חסרים נתיבים – נטען manifest
-          if (alreadyPath < normalized.length) {
-            setStatus("טוען files_manifest...")
-            const manifestJson = await fetchJsonAny([
-              "/api/manifest",
-              "/lib/files_manifest.json"
-            ])
-
-            setStatus("בונה מפת any→path... (0/?)")
-            anyToPath = await buildAnyToPathMap(manifestJson, (done, total) => {
-              setStatus(`בונה מפת any→path... (${done}/${total})`)
-            })
-          }
-
-          // משלימים path לכל פריט
-          setStatus(`משלים נתיבים... (0/${normalized.length})`)
+          setStatus(`משלים נתיבים לכל metadata... (0/${normalized.length})`)
           let filled = 0
           for (let i = 0; i < normalized.length; i++) {
-            let p = normalized[i].path
-            if (!looksLikePath(p) && anyToPath) {
-              const candidates = collectCandidateIds(normalized[i])
-              p = resolvePathFromMap(anyToPath, candidates)
-            }
+            const p = resolvePathForMeta(normalized[i], maps)
             normalized[i].path = looksLikePath(p) ? String(p).trim() : ""
             if (normalized[i].path) filled++
 
-            if (i % 5000 === 0) {
-              setStatus(`משלים נתיבים... (${i}/${normalized.length})`)
+            if (i % 1000 === 0) {
+              setStatus(`משלים נתיבים לכל metadata... (${i}/${normalized.length}) | נמצאו: ${filled}`)
               await tick()
             }
           }
-          setStatus(`משלים נתיבים... (${normalized.length}/${normalized.length})`)
+          setStatus(`משלים נתיבים לכל metadata... (${normalized.length}/${normalized.length}) | נמצאו: ${filled}`)
 
-          setStatus(`בונה אינדקס... (0/${normalized.length})`)
+          setStatus(`בונה אינדקס חיפוש... (0/${normalized.length})`)
           items = await buildIndex(normalized, (done, total) => {
-            setStatus(`בונה אינדקס... (${done}/${total})`)
+            setStatus(`בונה אינדקס חיפוש... (${done}/${total})`)
           })
 
-          // מציג תוצאות כברירת מחדל רק עם path
+          // כברירת מחדל מציג רק עם קובץ
           document.getElementById("showAll").checked = false
           applySearch()
           scrollToResults()
