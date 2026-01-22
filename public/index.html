@@ -3,241 +3,269 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>ספרייה - קטלוג בסיסי</title>
+    <title>Catalog Viewer</title>
     <style>
-      body { font-family: system-ui, Arial; margin: 16px; }
-      .row { margin-top: 10px; }
-      .muted { color: #666; font-size: 13px; }
-      input { width: 100%; padding: 10px; font-size: 16px; }
-      button { padding: 10px 12px; font-size: 14px; margin: 6px 6px 6px 0; }
-      .grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-      .card { border: 1px solid #ddd; border-radius: 10px; padding: 10px; }
-      .title { font-weight: 700; }
-      .meta { margin-top: 6px; color: #444; font-size: 14px; }
-      .path { margin-top: 6px; color: #888; font-size: 12px; direction: ltr; text-align: left; word-break: break-all; }
-      iframe { width: 100%; height: 70vh; border: 1px solid #ddd; border-radius: 10px; margin-top: 12px; }
-      a { word-break: break-all; }
-      .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-      .pill { padding: 4px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; color: #444; }
+      :root{
+        --bg:#0b1220;
+        --card:#0f1a2f;
+        --muted:#93a4c7;
+        --text:#e8eeff;
+        --line:rgba(255,255,255,.08);
+        --btn:#1d4ed8;
+        --btn2:#334155;
+      }
+      body{
+        margin:0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans Hebrew", sans-serif;
+        background:var(--bg);
+        color:var(--text);
+      }
+      header{
+        padding:18px 16px;
+        border-bottom:1px solid var(--line);
+        position:sticky;
+        top:0;
+        background:linear-gradient(to bottom, rgba(11,18,32,.98), rgba(11,18,32,.92));
+        backdrop-filter: blur(6px);
+        z-index:10;
+      }
+      .row{
+        display:flex;
+        gap:10px;
+        flex-wrap:wrap;
+        align-items:center;
+      }
+      .row > *{ flex: 0 0 auto; }
+      .grow{ flex: 1 1 auto; min-width:220px; }
+      input{
+        width:100%;
+        padding:10px 12px;
+        border-radius:10px;
+        border:1px solid var(--line);
+        background:rgba(255,255,255,.03);
+        color:var(--text);
+        outline:none;
+      }
+      button{
+        padding:10px 12px;
+        border-radius:10px;
+        border:1px solid var(--line);
+        color:var(--text);
+        background:var(--btn2);
+        cursor:pointer;
+      }
+      button.primary{ background:var(--btn); border-color:rgba(255,255,255,.12); }
+      button:disabled{ opacity:.5; cursor:not-allowed; }
+      main{
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap:14px;
+        padding:14px;
+      }
+      @media (max-width: 980px){
+        main{ grid-template-columns:1fr; }
+      }
+      .card{
+        background:var(--card);
+        border:1px solid var(--line);
+        border-radius:14px;
+        overflow:hidden;
+        min-height:220px;
+      }
+      .card h2{
+        margin:0;
+        font-size:15px;
+        padding:12px 12px;
+        border-bottom:1px solid var(--line);
+        color:#dbe6ff;
+      }
+      .status{
+        margin-top:10px;
+        font-size:13px;
+        color:var(--muted);
+      }
+      .list{
+        max-height:62vh;
+        overflow:auto;
+      }
+      .item{
+        padding:10px 12px;
+        border-bottom:1px solid var(--line);
+        cursor:pointer;
+      }
+      .item:hover{ background:rgba(255,255,255,.03); }
+      .title{ font-size:14px; }
+      .meta{ font-size:12px; color:var(--muted); margin-top:4px; }
+      .mono{
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+        padding:12px;
+        line-height:1.55;
+      }
+      .hint{
+        padding:12px;
+        color:var(--muted);
+        font-size:13px;
+      }
+      .tabs{
+        display:flex;
+        gap:8px;
+        padding:10px 12px;
+        border-bottom:1px solid var(--line);
+      }
+      .tab{
+        padding:8px 10px;
+        border-radius:10px;
+        border:1px solid var(--line);
+        background:rgba(255,255,255,.03);
+        cursor:pointer;
+        font-size:13px;
+        color:var(--text);
+      }
+      .tab.active{
+        background:rgba(29,78,216,.25);
+        border-color:rgba(29,78,216,.45);
+      }
+      .small{
+        font-size:12px;
+        color:var(--muted);
+      }
+      .path{
+        direction:ltr;
+        unicode-bidi: plaintext;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size:12px;
+        color:var(--muted);
+      }
     </style>
   </head>
+
   <body>
-    <h2>קטלוג בסיסי (ממשק בלבד) — הקבצים נשארים ב־GitHub</h2>
-    <div class="muted">
-      טעינת מטא־דאטה מהשרת שלך (<code>/api/metadata</code> עם קאש), חיפוש, ופתיחה דרך <code>/lib/...</code>.
-    </div>
-
-    <div class="row toolbar">
-      <button id="btnLoad" onclick="loadMetadata()">טען קטלוג</button>
-      <button onclick="openPath()">פתח נתיב ידני</button>
-      <button onclick="ping()">בדיקה: /api/ping</button>
-      <span id="status" class="pill">לא נטען</span>
-    </div>
-
-    <div class="row">
-      <input id="q" placeholder="חיפוש (כותרת/מחבר/נתיב)..." oninput="onSearchInput()" />
-    </div>
-
-    <div class="row">
-      <input id="path" placeholder="נתיב ידני בתוך הריפו (למשל: משהו/קובץ.pdf)" />
-      <div class="muted">
-        קישור נוכחי: <a id="link" href="#" target="_blank" rel="noreferrer">—</a>
+    <header>
+      <div class="row">
+        <button id="btnLoad" class="primary">טען קטלוג</button>
+        <button id="btnClear">נקה</button>
+        <input id="q" class="grow" type="search" placeholder="חפש לפי כותרת / מחבר..." disabled />
       </div>
-    </div>
+      <div id="status" class="status">מוכן.</div>
+      <div class="status small">
+        מקור נתונים: <span id="baseLabel" class="path"></span>
+      </div>
+    </header>
 
-    <iframe id="viewer" title="viewer"></iframe>
+    <main>
+      <section class="card">
+        <h2>רשימת כותרים (metadata)</h2>
+        <div id="listMeta" class="list">
+          <div class="hint">לחץ על "טען קטלוג" כדי לטעון את הרשימה.</div>
+        </div>
+      </section>
 
-    <h3 style="margin-top:16px;">תוצאות</h3>
-    <div id="results" class="grid"></div>
+      <section class="card">
+        <h2>קבצים ותוכן (manifest + viewer)</h2>
+        <div class="tabs">
+          <button id="tabFiles" class="tab active">קבצים</button>
+          <button id="tabText" class="tab">תוכן</button>
+        </div>
+        <div id="paneFiles" class="list">
+          <div class="hint">לאחר טעינה, יוצגו כאן נתיבי קבצים מה־manifest.</div>
+        </div>
+        <div id="paneText" style="display:none;">
+          <div id="textHeader" class="hint">
+            בחר קובץ כדי להציג את התוכן כאן.
+          </div>
+          <div id="textBody" class="mono"></div>
+        </div>
+      </section>
+    </main>
 
     <script>
-      let rawItems = []
-      let items = []
-      let currentList = []
-      let renderCursor = 0
-      const PAGE_SIZE = 60
+      // =========================
+      // SETTINGS
+      // =========================
+      // אם שמת metadata.json + files_manifest.json ליד index.html, שנה ל:
+      // const LIB_BASE = ".";
+      const LIB_BASE = "https://raw.githubusercontent.com/amram313/otzaria-library/main";
 
-      function setStatus(text) {
-        document.getElementById("status").textContent = text
+      // =========================
+      // STATE
+      // =========================
+      const state = {
+        meta: [],
+        files: [],
+        loaded: false,
+        lastSelectedPath: ""
+      };
+
+      // =========================
+      // DOM
+      // =========================
+      const $ = (id) => document.getElementById(id);
+
+      const btnLoad = $("btnLoad");
+      const btnClear = $("btnClear");
+      const q = $("q");
+      const statusEl = $("status");
+      const baseLabel = $("baseLabel");
+
+      const listMeta = $("listMeta");
+      const paneFiles = $("paneFiles");
+      const paneText = $("paneText");
+      const textHeader = $("textHeader");
+      const textBody = $("textBody");
+
+      const tabFiles = $("tabFiles");
+      const tabText = $("tabText");
+
+      baseLabel.textContent = LIB_BASE;
+
+      // =========================
+      // HELPERS
+      // =========================
+      function setStatus(msg){
+        statusEl.textContent = msg;
       }
 
-      function encodePath(path) {
-        return String(path)
+      function encodePath(p){
+        return (p || "")
           .split("/")
-          .filter(Boolean)
-          .map(encodeURIComponent)
-          .join("/")
+          .map(seg => encodeURIComponent(seg))
+          .join("/");
       }
 
-      function libUrl(pathOrUrl) {
-        const v = String(pathOrUrl || "").trim()
-        if (!v) return ""
-        if (v.startsWith("http://") || v.startsWith("https://")) return v
-        return "/lib/" + encodePath(v)
-      }
-
-      function refreshLink(url) {
-        const a = document.getElementById("link")
-        a.textContent = url || "—"
-        a.href = url || "#"
-      }
-
-      function openPath() {
-        const p = document.getElementById("path").value.trim()
-        const url = libUrl(p)
-        if (!url) return
-        refreshLink(url)
-        document.getElementById("viewer").src = url
-      }
-
-      function openItem(it) {
-        document.getElementById("path").value = it.path || ""
-        const url = libUrl(it.path)
-        refreshLink(url)
-        document.getElementById("viewer").src = url
-        window.scrollTo({ top: 0, behavior: "smooth" })
-      }
-
-      function pickMainArray(json) {
-        if (Array.isArray(json)) return json
-        if (!json || typeof json !== "object") return []
-
-        // מחפש מערך "עיקרי" (הכי גדול) בתוך אובייקט
-        let best = null
-        let bestLen = -1
-        for (const [k, v] of Object.entries(json)) {
-          if (Array.isArray(v) && v.length > bestLen) {
-            best = v
-            bestLen = v.length
-          }
+      async function fetchJson(url){
+        const r = await fetch(url, { cache: "no-store" });
+        const t = await r.text();
+        if(!r.ok){
+          throw new Error(`HTTP ${r.status} (${url}) :: ${t.slice(0,180)}`);
         }
-        return best || []
-      }
-
-      function normalizeItem(x) {
-        const o = (x && typeof x === "object") ? x : {}
-
-        const title =
-          o.title ?? o.name ?? o.he_title ?? o.heb_title ?? o.book ?? ""
-
-        const author =
-          o.author ?? o.authors ?? o.by ?? o.creator ?? ""
-
-        const path =
-          o.path ?? o.file ?? o.filename ?? o.relpath ?? o.uri ?? o.url ?? ""
-
-        return {
-          title: String(title || "").trim(),
-          author: String(author || "").trim(),
-          path: String(path || "").trim()
+        try{
+          return JSON.parse(t);
+        }catch(e){
+          throw new Error(`JSON parse failed (${url}) :: ${t.slice(0,180)}`);
         }
       }
 
-      async function buildIndex(list) {
-        // בנייה במנות כדי לא לתקוע דפדפן אם זה גדול
-        const out = []
-        for (let i = 0; i < list.length; i++) {
-          const it = normalizeItem(list[i])
-          if (it.path) {
-            const q = (it.title + " " + it.author + " " + it.path).toLowerCase()
-            out.push({ ...it, q })
-          }
-          if (i % 1500 === 0) {
-            await new Promise(r => setTimeout(r, 0))
-          }
-        }
-        return out
+      function normalizeMeta(raw){
+        // מצפה למערך. אם הגיע עטוף באובייקט, מנסה לחלץ.
+        if(Array.isArray(raw)) return raw;
+        if(raw && Array.isArray(raw.items)) return raw.items;
+        if(raw && Array.isArray(raw.data)) return raw.data;
+        if(raw && Array.isArray(raw.metadata)) return raw.metadata;
+        return [];
       }
 
-      function clearResults() {
-        document.getElementById("results").innerHTML = ""
-        renderCursor = 0
-      }
+      function normalizeFiles(raw){
+        // מנסה כמה מבנים נפוצים של manifest
+        // 1) ["a/b.txt", ...]
+        if(Array.isArray(raw) && raw.every(x => typeof x === "string")) return raw;
 
-      function renderNextPage() {
-        const root = document.getElementById("results")
-        const end = Math.min(renderCursor + PAGE_SIZE, currentList.length)
-        for (let i = renderCursor; i < end; i++) {
-          const it = currentList[i]
-          const div = document.createElement("div")
-          div.className = "card"
-          div.innerHTML = `
-            <div class="title">${escapeHtml(it.title || "(ללא כותרת)")}</div>
-            <div class="meta">${escapeHtml(it.author || "")}</div>
-            <div class="path">${escapeHtml(it.path || "")}</div>
-          `
-          div.onclick = () => openItem(it)
-          root.appendChild(div)
-        }
-        renderCursor = end
-      }
+        // 2) { files: ["..."] }
+        if(raw && Array.isArray(raw.files)) return raw.files.filter(x => typeof x === "string");
 
-      function escapeHtml(s) {
-        return String(s)
-          .replaceAll("&", "&amp;")
-          .replaceAll("<", "&lt;")
-          .replaceAll(">", "&gt;")
-          .replaceAll('"', "&quot;")
-          .replaceAll("'", "&#039;")
-      }
+        // 3) { all: ["..."] } / { paths: ["..."] }
+        if(raw && Array.isArray(raw.paths)) return raw.paths.filter(x => typeof x === "string");
+        if(raw && Array.isArray(raw.all)) return raw.all.filter(x => typeof x === "string");
 
-      function applySearch() {
-        const q = document.getElementById("q").value.trim().toLowerCase()
-        if (!q) {
-          currentList = items
-        } else {
-          // חיפוש פשוט: כולל-מחרוזת
-          currentList = items.filter(it => it.q.includes(q))
-        }
-
-        clearResults()
-        renderNextPage()
-        setStatus(`תוצאות: ${currentList.length} (נטען: ${items.length})`)
-      }
-
-      let searchTimer = null
-      function onSearchInput() {
-        clearTimeout(searchTimer)
-        searchTimer = setTimeout(applySearch, 150)
-      }
-
-      async function loadMetadata() {
-        setStatus("טוען מטא־דאטה...")
-        document.getElementById("btnLoad").disabled = true
-
-        try {
-          const r = await fetch("/api/metadata", { cache: "no-store" })
-          if (!r.ok) throw new Error(`HTTP ${r.status}`)
-          const json = await r.json()
-
-          rawItems = pickMainArray(json)
-          setStatus(`מעבד... (${rawItems.length})`)
-
-          items = await buildIndex(rawItems)
-          currentList = items
-
-          clearResults()
-          renderNextPage()
-          setStatus(`נטען: ${items.length}`)
-
-          // גלילה: עוד תוצאות כשמגיעים לסוף
-          window.onscroll = () => {
-            if (renderCursor >= currentList.length) return
-            const nearBottom = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 400)
-            if (nearBottom) renderNextPage()
-          }
-        } catch (e) {
-          setStatus("שגיאה בטעינה")
-          alert("שגיאה: " + (e && e.message ? e.message : e))
-        } finally {
-          document.getElementById("btnLoad").disabled = false
-        }
-      }
-
-      async function ping() {
-        const r = await fetch("/api/ping")
-        alert(await r.text())
-      }
-    </script>
-  </body>
-</html>
+        // 4) tree-like: { name, children:[...] }  או  [{name, children}]
