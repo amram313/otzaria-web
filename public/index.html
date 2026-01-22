@@ -3,42 +3,64 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>ספרייה - דמו</title>
+    <title>ספרייה - קטלוג בסיסי</title>
     <style>
       body { font-family: system-ui, Arial; margin: 16px; }
+      .row { margin-top: 10px; }
+      .muted { color: #666; font-size: 13px; }
       input { width: 100%; padding: 10px; font-size: 16px; }
       button { padding: 10px 12px; font-size: 14px; margin: 6px 6px 6px 0; }
-      .row { margin-top: 10px; }
-      iframe { width: 100%; height: 75vh; border: 1px solid #ddd; margin-top: 12px; }
-      .muted { color: #666; font-size: 13px; }
+      .grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+      .card { border: 1px solid #ddd; border-radius: 10px; padding: 10px; }
+      .title { font-weight: 700; }
+      .meta { margin-top: 6px; color: #444; font-size: 14px; }
+      .path { margin-top: 6px; color: #888; font-size: 12px; direction: ltr; text-align: left; word-break: break-all; }
+      iframe { width: 100%; height: 70vh; border: 1px solid #ddd; border-radius: 10px; margin-top: 12px; }
       a { word-break: break-all; }
+      .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .pill { padding: 4px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; color: #444; }
     </style>
   </head>
   <body>
-    <h2>דמו: ממשק שמגיש קבצים מה־GitHub</h2>
+    <h2>קטלוג בסיסי (ממשק בלבד) — הקבצים נשארים ב־GitHub</h2>
     <div class="muted">
-      הדבק כאן נתיב קובץ מתוך repo (למשל: <code>אוצריא/...</code>) ואז פתח.
+      טעינת מטא־דאטה מהשרת שלך (<code>/api/metadata</code> עם קאש), חיפוש, ופתיחה דרך <code>/lib/...</code>.
     </div>
 
-    <div class="row">
-      <input id="path" placeholder="הדבק נתיב קובץ מהריפו (כולל תיקיות)..." />
-    </div>
-
-    <div class="row">
-      <button onclick="openPath()">פתח בתוך הדף</button>
-      <button onclick="openInNewTab()">פתח בטאב חדש</button>
-      <button onclick="setPathAndOpen('metadata.json')">בדיקה: metadata.json</button>
-      <button onclick="setPathAndOpen('files_manifest.json')">בדיקה: files_manifest.json</button>
+    <div class="row toolbar">
+      <button id="btnLoad" onclick="loadMetadata()">טען קטלוג</button>
+      <button onclick="openPath()">פתח נתיב ידני</button>
       <button onclick="ping()">בדיקה: /api/ping</button>
+      <span id="status" class="pill">לא נטען</span>
     </div>
 
-    <div class="row muted">
-      קישור נוכחי: <a id="link" href="#" target="_blank" rel="noreferrer">—</a>
+    <div class="row">
+      <input id="q" placeholder="חיפוש (כותרת/מחבר/נתיב)..." oninput="onSearchInput()" />
+    </div>
+
+    <div class="row">
+      <input id="path" placeholder="נתיב ידני בתוך הריפו (למשל: משהו/קובץ.pdf)" />
+      <div class="muted">
+        קישור נוכחי: <a id="link" href="#" target="_blank" rel="noreferrer">—</a>
+      </div>
     </div>
 
     <iframe id="viewer" title="viewer"></iframe>
 
+    <h3 style="margin-top:16px;">תוצאות</h3>
+    <div id="results" class="grid"></div>
+
     <script>
+      let rawItems = []
+      let items = []
+      let currentList = []
+      let renderCursor = 0
+      const PAGE_SIZE = 60
+
+      function setStatus(text) {
+        document.getElementById("status").textContent = text
+      }
+
       function encodePath(path) {
         return String(path)
           .split("/")
@@ -47,10 +69,11 @@
           .join("/")
       }
 
-      function currentUrl() {
-        const p = document.getElementById("path").value.trim()
-        if (!p) return ""
-        return "/lib/" + encodePath(p)
+      function libUrl(pathOrUrl) {
+        const v = String(pathOrUrl || "").trim()
+        if (!v) return ""
+        if (v.startsWith("http://") || v.startsWith("https://")) return v
+        return "/lib/" + encodePath(v)
       }
 
       function refreshLink(url) {
@@ -60,22 +83,155 @@
       }
 
       function openPath() {
-        const url = currentUrl()
+        const p = document.getElementById("path").value.trim()
+        const url = libUrl(p)
         if (!url) return
         refreshLink(url)
         document.getElementById("viewer").src = url
       }
 
-      function openInNewTab() {
-        const url = currentUrl()
-        if (!url) return
+      function openItem(it) {
+        document.getElementById("path").value = it.path || ""
+        const url = libUrl(it.path)
         refreshLink(url)
-        window.open(url, "_blank", "noopener,noreferrer")
+        document.getElementById("viewer").src = url
+        window.scrollTo({ top: 0, behavior: "smooth" })
       }
 
-      function setPathAndOpen(p) {
-        document.getElementById("path").value = p
-        openPath()
+      function pickMainArray(json) {
+        if (Array.isArray(json)) return json
+        if (!json || typeof json !== "object") return []
+
+        // מחפש מערך "עיקרי" (הכי גדול) בתוך אובייקט
+        let best = null
+        let bestLen = -1
+        for (const [k, v] of Object.entries(json)) {
+          if (Array.isArray(v) && v.length > bestLen) {
+            best = v
+            bestLen = v.length
+          }
+        }
+        return best || []
+      }
+
+      function normalizeItem(x) {
+        const o = (x && typeof x === "object") ? x : {}
+
+        const title =
+          o.title ?? o.name ?? o.he_title ?? o.heb_title ?? o.book ?? ""
+
+        const author =
+          o.author ?? o.authors ?? o.by ?? o.creator ?? ""
+
+        const path =
+          o.path ?? o.file ?? o.filename ?? o.relpath ?? o.uri ?? o.url ?? ""
+
+        return {
+          title: String(title || "").trim(),
+          author: String(author || "").trim(),
+          path: String(path || "").trim()
+        }
+      }
+
+      async function buildIndex(list) {
+        // בנייה במנות כדי לא לתקוע דפדפן אם זה גדול
+        const out = []
+        for (let i = 0; i < list.length; i++) {
+          const it = normalizeItem(list[i])
+          if (it.path) {
+            const q = (it.title + " " + it.author + " " + it.path).toLowerCase()
+            out.push({ ...it, q })
+          }
+          if (i % 1500 === 0) {
+            await new Promise(r => setTimeout(r, 0))
+          }
+        }
+        return out
+      }
+
+      function clearResults() {
+        document.getElementById("results").innerHTML = ""
+        renderCursor = 0
+      }
+
+      function renderNextPage() {
+        const root = document.getElementById("results")
+        const end = Math.min(renderCursor + PAGE_SIZE, currentList.length)
+        for (let i = renderCursor; i < end; i++) {
+          const it = currentList[i]
+          const div = document.createElement("div")
+          div.className = "card"
+          div.innerHTML = `
+            <div class="title">${escapeHtml(it.title || "(ללא כותרת)")}</div>
+            <div class="meta">${escapeHtml(it.author || "")}</div>
+            <div class="path">${escapeHtml(it.path || "")}</div>
+          `
+          div.onclick = () => openItem(it)
+          root.appendChild(div)
+        }
+        renderCursor = end
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;")
+      }
+
+      function applySearch() {
+        const q = document.getElementById("q").value.trim().toLowerCase()
+        if (!q) {
+          currentList = items
+        } else {
+          // חיפוש פשוט: כולל-מחרוזת
+          currentList = items.filter(it => it.q.includes(q))
+        }
+
+        clearResults()
+        renderNextPage()
+        setStatus(`תוצאות: ${currentList.length} (נטען: ${items.length})`)
+      }
+
+      let searchTimer = null
+      function onSearchInput() {
+        clearTimeout(searchTimer)
+        searchTimer = setTimeout(applySearch, 150)
+      }
+
+      async function loadMetadata() {
+        setStatus("טוען מטא־דאטה...")
+        document.getElementById("btnLoad").disabled = true
+
+        try {
+          const r = await fetch("/api/metadata", { cache: "no-store" })
+          if (!r.ok) throw new Error(`HTTP ${r.status}`)
+          const json = await r.json()
+
+          rawItems = pickMainArray(json)
+          setStatus(`מעבד... (${rawItems.length})`)
+
+          items = await buildIndex(rawItems)
+          currentList = items
+
+          clearResults()
+          renderNextPage()
+          setStatus(`נטען: ${items.length}`)
+
+          // גלילה: עוד תוצאות כשמגיעים לסוף
+          window.onscroll = () => {
+            if (renderCursor >= currentList.length) return
+            const nearBottom = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 400)
+            if (nearBottom) renderNextPage()
+          }
+        } catch (e) {
+          setStatus("שגיאה בטעינה")
+          alert("שגיאה: " + (e && e.message ? e.message : e))
+        } finally {
+          document.getElementById("btnLoad").disabled = false
+        }
       }
 
       async function ping() {
