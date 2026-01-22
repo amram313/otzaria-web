@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ספרייה - דמו</title>
+    <style>
+      body { font-family: system-ui, Arial; margin: 16px; }
+      input { width: 100%; padding: 10px; font-size: 16px; }
+      button { padding: 10px 12px; font-size: 14px; margin: 6px 6px 6px 0; }
+      .row { margin-top: 10px; }
+      iframe { width: 100%; height: 75vh; border: 1px solid #ddd; margin-top: 12px; }
+      .muted { color: #666; font-size: 13px; }
+      a { word-break: break-all; }
+    </style>
+  </head>
+  <body>
+    <h2>דמו: ממשק שמגיש קבצים מה־GitHub</h2>
+    <div class="muted">
+      הדבק כאן נתיב קובץ מתוך repo (למשל: <code>אוצריא/...</code>) ואז פתח.
+    </div>
+
+    <div class="row">
+      <input id="path" placeholder="הדבק נתיב קובץ מהריפו (כולל תיקיות)..." />
+    </div>
+
+    <div class="row">
+      <button onclick="openPath()">פתח בתוך הדף</button>
+      <button onclick="openInNewTab()">פתח בטאב חדש</button>
+      <button onclick="setPathAndOpen('metadata.json')">בדיקה: metadata.json</button>
+      <button onclick="setPathAndOpen('files_manifest.json')">בדיקה: files_manifest.json</button>
+      <button onclick="ping()">בדיקה: /api/ping</button>
+    </div>
+
+    <div class="row muted">
+      קישור נוכחי: <a id="link" href="#" target="_blank" rel="noreferrer">—</a>
+    </div>
+
+    <iframe id="viewer" title="viewer"></iframe>
+
+    <script>
+      function encodePath(path) {
+        return String(path)
+          .split("/")
+          .filter(Boolean)
+          .map(encodeURIComponent)
+          .join("/")
+      }
+
+      function currentUrl() {
+        const p = document.getElementById("path").value.trim()
+        if (!p) return ""
+        return "/lib/" + encodePath(p)
+      }
+
+      function refreshLink(url) {
+        const a = document.getElementById("link")
+        a.textContent = url || "—"
+        a.href = url || "#"
+      }
+
+      function openPath() {
+        const url = currentUrl()
+        if (!url) return
+        refreshLink(url)
+        document.getElementById("viewer").src = url
+      }
+
+      function openInNewTab() {
+        const url = currentUrl()
+        if (!url) return
+        refreshLink(url)
+        window.open(url, "_blank", "noopener,noreferrer")
+      }
+
+      function setPathAndOpen(p) {
+        document.getElementById("path").value = p
+        openPath()
+      }
+
+      async function ping() {
+        const r = await fetch("/api/ping")
+        alert(await r.text())
+      }
+    </script>
+  </body>
+</html>
