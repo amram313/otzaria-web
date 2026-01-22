@@ -20,12 +20,13 @@
       .pill { padding: 4px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; color: #444; }
       .viewerWrap { display: none; margin-top: 12px; }
       iframe { width: 100%; height: 70vh; border: 1px solid #ddd; border-radius: 10px; }
+      label { user-select: none; }
     </style>
   </head>
   <body>
-    <h2>קטלוג בסיסי — הקבצים נשארים ב־GitHub</h2>
+    <h2>קטלוג בסיסי — הממשק אצלך, הקבצים נשארים ב־GitHub</h2>
     <div class="muted">
-      נטען metadata ואז משלים נתיבים אמיתיים מתוך files_manifest (תומך גם path→hash וגם hash→path).
+      טוען metadata, משלים נתיבים מתוך files_manifest, ואז פותח דרך <code>/lib/...</code>.
     </div>
 
     <div class="row toolbar">
@@ -33,6 +34,10 @@
       <button onclick="scrollToResults()">לתוצאות</button>
       <button onclick="openPath()">פתח נתיב ידני</button>
       <button onclick="ping()">בדיקה: /api/ping</button>
+      <label class="pill">
+        <input id="showAll" type="checkbox" onchange="applySearch()" />
+        הצג גם פריטים בלי קובץ
+      </label>
       <span id="status" class="pill">לא נטען</span>
     </div>
 
@@ -106,7 +111,13 @@
 
       function openItem(it) {
         if (!it.path) {
-          alert("אין נתיב לפתיחה עבור פריט זה (כנראה שה־manifest לא הותאם).")
+          alert(
+            "אין נתיב לפתיחה עבור פריט זה.\n" +
+            "נסה לסמן 'הצג גם פריטים בלי קובץ' כדי לראות מה מגיע.\n\n" +
+            "דיבאג קצר:\n" +
+            "id: " + (it.id || "") + "\n" +
+            "_key: " + (it._key || "")
+          )
           return
         }
         document.getElementById("path").value = it.path || ""
@@ -126,28 +137,36 @@
           .replaceAll("'", "&#039;")
       }
 
-      // ---- Heuristics
+      function tick() {
+        return new Promise(r => setTimeout(r, 0))
+      }
+
+      // ---------- זיהויים
 
       function looksLikePath(s) {
         const x = String(s || "")
         if (!x) return false
         if (x.includes("://")) return true
-        if (x.includes("/") || x.includes("\\")) return true
-        if (/\.(pdf|txt|docx)$/i.test(x)) return true
+        // נתיב צריך לפחות "/" + סיומת
+        if ((x.includes("/") || x.includes("\\")) && /\.[a-z0-9]{2,6}$/i.test(x)) return true
+        // סיומות שכיחות (גם בלי "/" - למקרים כמו "metadata.json")
+        if (/\.(pdf|txt|docx|json|zip|md)$/i.test(x)) return true
         return false
       }
 
-      function looksLikeHash(s) {
+      function looksLikeHashish(s) {
         const x = String(s || "").trim()
         if (!x) return false
-        // md5=32, sha1=40, sha256=64
+        // md5/sha1/sha256 או דומה
         if (/^[0-9a-f]{32}$/i.test(x)) return true
         if (/^[0-9a-f]{40}$/i.test(x)) return true
         if (/^[0-9a-f]{64}$/i.test(x)) return true
+        // לפעמים יש prefix כמו "sha1:<hex>"
+        if (/^(sha1|sha256|md5):[0-9a-f]{16,64}$/i.test(x)) return true
         return false
       }
 
-      // ---- Fetch helper (מעדיף /api ואם אין אז /lib)
+      // ---------- טעינת JSON (מעדיף /api ואם אין אז /lib)
 
       async function fetchJsonAny(urls) {
         let lastErr = null
@@ -163,7 +182,7 @@
         throw lastErr || new Error("fetch failed")
       }
 
-      // ---- metadata extraction
+      // ---------- חילוץ metadata לרשימה
 
       function objectToArrayMap(obj) {
         const arr = []
@@ -181,7 +200,6 @@
         if (Array.isArray(json)) return json
         if (!json || typeof json !== "object") return []
 
-        // אם יש מערך ברמה העליונה – הכי גדול
         let bestArr = null
         let bestLen = -1
         for (const v of Object.values(json)) {
@@ -192,7 +210,6 @@
         }
         if (bestArr) return bestArr
 
-        // wrappers נפוצים
         const containerKeys = ["items", "books", "data", "metadata", "list"]
         for (const k of containerKeys) {
           const v = json[k]
@@ -200,19 +217,17 @@
           if (v && typeof v === "object") return objectToArrayMap(v)
         }
 
-        // אם זה Object גדול עם מפתחות שנראים כמו נתיבים/האשים
         const keys = Object.keys(json)
         if (keys.length) {
           const sampleN = Math.min(keys.length, 500)
           let score = 0
           for (let i = 0; i < sampleN; i++) {
             const kk = keys[i]
-            if (looksLikePath(kk) || looksLikeHash(kk)) score++
+            if (looksLikePath(kk) || looksLikeHashish(kk)) score++
           }
           if (score / sampleN >= 0.15) return objectToArrayMap(json)
         }
 
-        // רמה אחת פנימה: object הכי גדול
         let bestObj = null
         let bestObjSize = 0
         for (const v of Object.values(json)) {
@@ -241,9 +256,8 @@
         const pathVal =
           o.path ?? o.file ?? o.filename ?? o.relpath ?? o.uri ?? o.url ?? ""
 
-        // id/hash יכול להיות כאן או במפתח
         const idVal =
-          o.id ?? o.hash ?? o.sha ?? o.sha1 ?? o.md5 ?? o.filehash ?? o._key ?? ""
+          o.id ?? o.hash ?? o.sha ?? o.sha1 ?? o.sha256 ?? o.md5 ?? o.filehash ?? o._key ?? ""
 
         const title = Array.isArray(titleVal) ? titleVal.join(" ") : titleVal
         const author = Array.isArray(authorVal) ? authorVal.join(", ") : authorVal
@@ -254,25 +268,41 @@
           author: String(author || "").trim(),
           path: String(path || "").trim(),
           id: String(idVal || "").trim(),
-          _key: String(o._key || "").trim()
+          _key: String(o._key || "").trim(),
+          _raw: o
         }
       }
 
-      function pickPathFromMeta(meta) {
-        if (looksLikePath(meta.path)) return meta.path
-        if (looksLikePath(meta._key)) return meta._key
-        return ""
+      function collectCandidateIds(meta) {
+        const out = new Set()
+
+        const push = (v) => {
+          if (typeof v !== "string") return
+          const s = v.trim()
+          if (!s) return
+          if (s.length > 500) return
+          out.add(s)
+          // גם בלי prefix אם יש
+          const m = s.match(/^(sha1|sha256|md5):(.+)$/i)
+          if (m && m[2]) out.add(m[2])
+        }
+
+        push(meta.path)
+        push(meta.id)
+        push(meta._key)
+
+        // חיפוש בעוד כמה שדות נפוצים מתוך _raw
+        const r = meta._raw || {}
+        const keys = ["file", "filename", "relpath", "uri", "url", "hash", "sha", "sha1", "sha256", "md5", "filehash"]
+        for (const k of keys) {
+          const v = r[k]
+          if (typeof v === "string") push(v)
+        }
+
+        return Array.from(out)
       }
 
-      function pickHashFromMeta(meta) {
-        // מנסה להוציא hash כדי להשלים path מהמניפסט
-        if (looksLikeHash(meta.id)) return meta.id
-        if (looksLikeHash(meta._key)) return meta._key
-        if (looksLikeHash(meta.path)) return meta.path
-        return ""
-      }
-
-      // ---- manifest parsing (תומך גם path->hash וגם hash->path)
+      // ---------- manifest -> anyId->path
 
       function extractManifestEntries(manifestJson) {
         if (!manifestJson || typeof manifestJson !== "object") return []
@@ -281,53 +311,95 @@
         return Object.entries(v)
       }
 
-      function getHashFromManifestValue(val) {
-        if (typeof val === "string") return val
-        if (val && typeof val === "object") {
-          return val.hash || val.sha || val.sha1 || val.md5 || val.id || ""
+      function collectStringsFromValue(val) {
+        const out = []
+        const push = (s) => {
+          if (typeof s !== "string") return
+          const x = s.trim()
+          if (!x) return
+          if (x.length > 500) return
+          out.push(x)
+          const m = x.match(/^(sha1|sha256|md5):(.+)$/i)
+          if (m && m[2]) out.push(m[2])
         }
-        return ""
+
+        if (typeof val === "string") {
+          push(val)
+          return out
+        }
+
+        if (val && typeof val === "object") {
+          for (const v of Object.values(val)) {
+            if (typeof v === "string") push(v)
+          }
+        }
+
+        return out
       }
 
-      async function buildManifestMaps(manifestJson, onProgress) {
-        const hashToPath = new Map()
+      async function buildAnyToPathMap(manifestJson, onProgress) {
+        const anyToPath = new Map()
         const entries = extractManifestEntries(manifestJson)
         const total = entries.length
 
         for (let i = 0; i < total; i++) {
           const [k, vRaw] = entries[i]
-          const v = getHashFromManifestValue(vRaw)
+          const kStr = String(k || "").trim()
+          const vStrings = collectStringsFromValue(vRaw)
 
-          const kIsPath = looksLikePath(k)
-          const kIsHash = looksLikeHash(k)
-          const vIsPath = looksLikePath(v)
-          const vIsHash = looksLikeHash(v)
+          // מנסים להסיק "path" מהצד שנראה כמו נתיב
+          let path = ""
+          if (looksLikePath(kStr)) {
+            path = kStr
+          } else {
+            for (const s of vStrings) {
+              if (looksLikePath(s)) {
+                path = s
+                break
+              }
+            }
+          }
 
-          // מקרה 1: path -> hash
-          if (kIsPath && vIsHash) {
-            if (!hashToPath.has(v)) hashToPath.set(v, k)
-          }
-          // מקרה 2: hash -> path
-          else if (kIsHash && vIsPath) {
-            if (!hashToPath.has(k)) hashToPath.set(k, v)
-          }
-          // מקרה 3: אם value הוא אובייקט ו-k הוא path ויש בו hash פנימי
-          else if (kIsPath && !vIsHash && vRaw && typeof vRaw === "object") {
-            const h2 = getHashFromManifestValue(vRaw)
-            if (looksLikeHash(h2) && !hashToPath.has(h2)) hashToPath.set(h2, k)
+          if (path) {
+            // ממפים גם את המפתח וגם כל מחרוזת שנמצאה לערך "path"
+            if (kStr) anyToPath.set(kStr, path)
+            for (const s of vStrings) anyToPath.set(s, path)
+          } else {
+            // גם אם לא זיהינו path, עדיין נשמור קשר בין key/value (לפעמים metadata מכיל key שמצביע ל-value אחר)
+            if (kStr && vStrings.length) {
+              for (const s of vStrings) {
+                if (!anyToPath.has(kStr)) anyToPath.set(kStr, s)
+                if (!anyToPath.has(s)) anyToPath.set(s, kStr)
+              }
+            }
           }
 
           if (i % 5000 === 0) {
             if (onProgress) onProgress(i, total)
-            await new Promise(r => setTimeout(r, 0))
+            await tick()
           }
         }
 
         if (onProgress) onProgress(total, total)
-        return { hashToPath, entriesCount: total }
+        return anyToPath
       }
 
-      // ---- UI list build
+      function resolvePathFromMap(anyToPath, candidates) {
+        for (const c of candidates) {
+          if (anyToPath.has(c)) {
+            const p = anyToPath.get(c)
+            if (looksLikePath(p)) return p
+            // אם זה לא path, אולי זה קפיצה אחת עד path
+            if (anyToPath.has(p)) {
+              const p2 = anyToPath.get(p)
+              if (looksLikePath(p2)) return p2
+            }
+          }
+        }
+        return ""
+      }
+
+      // ---------- UI
 
       async function buildIndex(list, onProgress) {
         const out = []
@@ -340,7 +412,7 @@
 
           if (i % 2000 === 0) {
             if (onProgress) onProgress(i, total)
-            await new Promise(r => setTimeout(r, 0))
+            await tick()
           }
         }
 
@@ -375,10 +447,19 @@
 
       function applySearch() {
         const q = document.getElementById("q").value.trim().toLowerCase()
-        currentList = q ? items.filter(it => it.q.includes(q)) : items
+        const showAll = document.getElementById("showAll").checked
+
+        let base = items
+        if (!showAll) base = base.filter(it => it.path)
+
+        currentList = q ? base.filter(it => it.q.includes(q)) : base
+
         clearResults()
         renderNextPage()
-        setStatus(`נטען: ${items.length} | תוצאות: ${currentList.length}`)
+
+        const withPath = items.filter(it => it.path).length
+        const withoutPath = items.length - withPath
+        setStatus(`סה"כ: ${items.length} | עם קובץ: ${withPath} | בלי קובץ: ${withoutPath} | מוצג: ${currentList.length}`)
       }
 
       let searchTimer = null
@@ -392,7 +473,6 @@
         document.getElementById("btnLoad").disabled = true
 
         try {
-          // 1) metadata (מעדיף API, ואם אין אז דרך /lib)
           const metaJson = await fetchJsonAny([
             "/api/metadata",
             "/lib/metadata.json"
@@ -407,83 +487,65 @@
           }
 
           setStatus(`מעבד metadata... (0/${rawMetaItems.length})`)
-          let normalized = []
+          const normalized = []
           for (let i = 0; i < rawMetaItems.length; i++) {
             normalized.push(normalizeMetaItem(rawMetaItems[i]))
             if (i % 3000 === 0) {
               setStatus(`מעבד metadata... (${i}/${rawMetaItems.length})`)
-              await new Promise(r => setTimeout(r, 0))
+              await tick()
             }
           }
           setStatus(`מעבד metadata... (${rawMetaItems.length}/${rawMetaItems.length})`)
 
-          // 2) אם חסרים נתיבים, נשלים מה־manifest
-          let missing = 0
-          for (let i = 0; i < Math.min(normalized.length, 2000); i++) {
-            if (!pickPathFromMeta(normalized[i])) missing++
+          // בדיקה כמה פריטים כבר כוללים path
+          let alreadyPath = 0
+          for (let i = 0; i < normalized.length; i++) {
+            if (looksLikePath(normalized[i].path)) alreadyPath++
           }
 
-          let hashToPath = null
+          let anyToPath = null
 
-          if (missing > 0) {
+          // אם חסרים נתיבים – נטען manifest
+          if (alreadyPath < normalized.length) {
             setStatus("טוען files_manifest...")
             const manifestJson = await fetchJsonAny([
               "/api/manifest",
               "/lib/files_manifest.json"
             ])
 
-            setStatus("בונה מפת hash→path... (0/?)")
-            const maps = await buildManifestMaps(manifestJson, (done, total) => {
-              setStatus(`בונה מפת hash→path... (${done}/${total})`)
+            setStatus("בונה מפת any→path... (0/?)")
+            anyToPath = await buildAnyToPathMap(manifestJson, (done, total) => {
+              setStatus(`בונה מפת any→path... (${done}/${total})`)
             })
-            hashToPath = maps.hashToPath
           }
 
-          // 3) השלמת path לכל פריט
+          // משלימים path לכל פריט
           setStatus(`משלים נתיבים... (0/${normalized.length})`)
+          let filled = 0
           for (let i = 0; i < normalized.length; i++) {
-            let p = pickPathFromMeta(normalized[i])
-
-            if (!p && hashToPath) {
-              const h = pickHashFromMeta(normalized[i])
-              if (h && hashToPath.has(h)) p = hashToPath.get(h)
+            let p = normalized[i].path
+            if (!looksLikePath(p) && anyToPath) {
+              const candidates = collectCandidateIds(normalized[i])
+              p = resolvePathFromMap(anyToPath, candidates)
             }
-
-            normalized[i].path = String(p || "").trim()
+            normalized[i].path = looksLikePath(p) ? String(p).trim() : ""
+            if (normalized[i].path) filled++
 
             if (i % 5000 === 0) {
               setStatus(`משלים נתיבים... (${i}/${normalized.length})`)
-              await new Promise(r => setTimeout(r, 0))
+              await tick()
             }
           }
           setStatus(`משלים נתיבים... (${normalized.length}/${normalized.length})`)
 
-          // 4) אינדוקס + סינון
-          setStatus(`בונה אינדקס חיפוש... (0/${normalized.length})`)
-          let indexed = await buildIndex(normalized, (done, total) => {
-            setStatus(`בונה אינדקס חיפוש... (${done}/${total})`)
+          setStatus(`בונה אינדקס... (0/${normalized.length})`)
+          items = await buildIndex(normalized, (done, total) => {
+            setStatus(`בונה אינדקס... (${done}/${total})`)
           })
 
-          const before = indexed.length
-          indexed = indexed.filter(it => it.path && looksLikePath(it.path))
-          const after = indexed.length
-
-          // אם עדיין הכל סונן, לא נשאיר אותך עם 0: נשאיר את הרשימה בלי סינון כדי שתראה מה מגיע מה־metadata
-          if (after === 0 && before > 0) {
-            items = await buildIndex(normalized, null)
-            currentList = items
-            clearResults()
-            renderNextPage()
-            setStatus(`נטען: 0 | סוננו: ${before} (אין נתיבי פתיחה – בדוק manifest)`)
-            scrollToResults()
-            return
-          }
-
-          items = indexed
-          currentList = items
-          clearResults()
-          renderNextPage()
-          setStatus(`נטען: ${after} | סוננו: ${before - after}`)
+          // מציג תוצאות כברירת מחדל רק עם path
+          document.getElementById("showAll").checked = false
+          applySearch()
           scrollToResults()
 
           window.onscroll = () => {
