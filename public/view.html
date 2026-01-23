@@ -5,23 +5,48 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>צפייה</title>
     <style>
+      :root {
+        --fontSize: 18px;
+        --lineHeight: 1.7;
+        --pageMax: 980px;
+        --pagePad: 18px;
+      }
+
       body {
         font-family: system-ui, Arial;
         margin: 0;
         padding: 16px;
         background: #fafafa;
       }
+
+      body.book {
+        --pageMax: 720px;
+        --pagePad: 22px;
+        --lineHeight: 1.85;
+      }
+
       .wrap {
-        max-width: 980px;
+        max-width: var(--pageMax);
         margin: 0 auto;
       }
+
       .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: #fafafa;
+        padding: 10px 0;
+        border-bottom: 1px solid #eee;
+        margin-bottom: 12px;
+      }
+
+      .row {
         display: flex;
         gap: 10px;
         align-items: center;
         flex-wrap: wrap;
-        margin-bottom: 12px;
       }
+
       .btn {
         padding: 8px 12px;
         font-size: 14px;
@@ -30,35 +55,69 @@
         background: #fff;
         cursor: pointer;
       }
+
+      .btn:active {
+        transform: translateY(1px);
+      }
+
       .meta {
         font-size: 12px;
         color: #666;
         word-break: break-all;
+        margin-top: 8px;
       }
+
+      .select {
+        padding: 8px 10px;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        background: #fff;
+        font-size: 14px;
+        max-width: 100%;
+      }
+
+      .pill {
+        padding: 6px 10px;
+        border: 1px solid #ddd;
+        border-radius: 999px;
+        background: #fff;
+        font-size: 12px;
+        color: #444;
+      }
+
       .card {
         background: #fff;
         border: 1px solid #e5e5e5;
         border-radius: 12px;
-        padding: 18px;
+        padding: var(--pagePad);
       }
+
       .content {
         direction: rtl;
-        line-height: 1.7;
-        font-size: 18px;
+        line-height: var(--lineHeight);
+        font-size: var(--fontSize);
       }
-      .content h1 { font-size: 28px; margin: 0 0 10px 0; }
-      .content h2 { font-size: 22px; margin: 18px 0 8px 0; }
-      .content h3 { font-size: 19px; margin: 14px 0 6px 0; }
+
+      .content h1 { font-size: 1.55em; margin: 0 0 10px 0; }
+      .content h2 { font-size: 1.25em; margin: 18px 0 8px 0; }
+      .content h3 { font-size: 1.08em; margin: 14px 0 6px 0; }
       .content p  { margin: 10px 0; }
       .content b, .content strong { font-weight: 700; }
+
+      .content h2,
+      .content h3 {
+        scroll-margin-top: 90px;
+      }
+
       .pre {
         white-space: pre-wrap;
         word-break: break-word;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-        font-size: 15px;
+        font-size: calc(var(--fontSize) - 3px);
         line-height: 1.6;
         direction: rtl;
       }
+
       iframe {
         width: 100%;
         height: 80vh;
@@ -66,6 +125,7 @@
         border-radius: 12px;
         background: #fff;
       }
+
       .err {
         color: #a00;
         font-size: 14px;
@@ -73,16 +133,43 @@
         direction: ltr;
         text-align: left;
       }
+
+      .muted {
+        color: #666;
+        font-size: 12px;
+      }
+
+      .spacer {
+        flex: 1;
+      }
     </style>
   </head>
+
   <body>
     <div class="wrap">
       <div class="topbar">
-        <button class="btn" onclick="history.back()">חזור</button>
-        <button class="btn" id="btnRaw">פתח מקור (RAW)</button>
-      </div>
+        <div class="row">
+          <button class="btn" onclick="history.back()">חזור</button>
+          <button class="btn" id="btnRaw">פתח מקור (RAW)</button>
 
-      <div class="meta" id="meta"></div>
+          <span class="pill" id="fontLabel">גופן: —</span>
+          <button class="btn" id="btnMinus" title="הקטן גופן">−</button>
+          <button class="btn" id="btnPlus" title="הגדל גופן">+</button>
+
+          <button class="btn" id="btnBook" title="מצב עמוד ספר">עמוד ספר: כבוי</button>
+
+          <span class="spacer"></span>
+
+          <select class="select" id="chapterSel" style="display:none;"></select>
+          <select class="select" id="verseSel" style="display:none;"></select>
+          <button class="btn" id="btnTop" style="display:none;">למעלה</button>
+        </div>
+
+        <div class="meta" id="meta"></div>
+        <div class="muted" id="navHint" style="display:none;">
+          ניווט מופעל לפי כותרות <code>פרק</code>/<code>פסוק</code>.
+        </div>
+      </div>
 
       <div class="card" id="card">
         <div class="content" id="content"></div>
@@ -116,7 +203,6 @@
       }
 
       function sanitizeHtml(html) {
-        // בסיסי: מסיר script/style/iframe/object/embed/link ומנקה on* + javascript:
         const doc = new DOMParser().parseFromString(String(html || ""), "text/html")
 
         const kill = doc.querySelectorAll("script, style, iframe, object, embed, link")
@@ -124,14 +210,12 @@
 
         const all = doc.querySelectorAll("*")
         all.forEach((el) => {
-          // מוחק onClick/onLoad וכו'
           for (const attr of Array.from(el.attributes)) {
             const name = String(attr.name || "").toLowerCase()
             const val = String(attr.value || "")
             if (name.startsWith("on")) el.removeAttribute(attr.name)
             if (name === "href" && /^\s*javascript:/i.test(val)) el.removeAttribute(attr.name)
           }
-          // קישורים ייפתחו בטאב חדש
           if (el.tagName === "A") {
             el.setAttribute("target", "_blank")
             el.setAttribute("rel", "noreferrer noopener")
@@ -141,63 +225,131 @@
         return doc.body.innerHTML
       }
 
-      async function main() {
-        const path = getParam("path")
-        const meta = document.getElementById("meta")
-        const content = document.getElementById("content")
-        const pre = document.getElementById("pre")
-        const err = document.getElementById("err")
-        const pdf = document.getElementById("pdf")
-        const btnRaw = document.getElementById("btnRaw")
+      function clamp(n, a, b) {
+        return Math.max(a, Math.min(b, n))
+      }
 
-        if (!path) {
-          err.style.display = "block"
-          err.textContent = "Missing ?path="
-          return
-        }
-
-        meta.textContent = "path: " + path
-
-        // כפתור לפתיחת המקור דרך /lib (למי שרוצה)
-        btnRaw.onclick = () => {
-          const u = "/lib/" + encodePath(path)
-          window.open(u, "_blank", "noopener,noreferrer")
-        }
-
-        // PDF: iframe ישירות
-        if (isPdf(path)) {
-          pdf.style.display = "block"
-          pdf.src = "/lib/" + encodePath(path)
-          return
-        }
-
-        // טקסט/HTML: fetch ואז render
-        const url = "/lib/" + encodePath(path)
-
-        const r = await fetch(url, { cache: "no-store" })
-        if (!r.ok) {
-          err.style.display = "block"
-          err.textContent = "Fetch failed: " + r.status + "\n" + url
-          return
-        }
-
-        const text = await r.text()
-
-        if (looksLikeHtml(text)) {
-          content.innerHTML = sanitizeHtml(text)
-          pre.style.display = "none"
-        } else {
-          content.innerHTML = ""
-          pre.style.display = "block"
-          pre.textContent = text
+      function loadPrefs() {
+        const fontSize = Number(localStorage.getItem("view_fontSize") || "18")
+        const book = localStorage.getItem("view_bookMode") === "1"
+        return {
+          fontSize: clamp(Number.isFinite(fontSize) ? fontSize : 18, 12, 34),
+          book
         }
       }
 
-      main().catch((e) => {
-        const err = document.getElementById("err")
-        err.style.display = "block"
-        err.textContent = String(e && e.message ? e.message : e)
-      })
-    </script>
-  </body>
-</html>
+      function savePrefs(prefs) {
+        localStorage.setItem("view_fontSize", String(prefs.fontSize))
+        localStorage.setItem("view_bookMode", prefs.book ? "1" : "0")
+      }
+
+      function applyPrefs(prefs) {
+        document.documentElement.style.setProperty("--fontSize", prefs.fontSize + "px")
+        document.getElementById("fontLabel").textContent = "גופן: " + prefs.fontSize
+        document.body.classList.toggle("book", !!prefs.book)
+        document.getElementById("btnBook").textContent = "עמוד ספר: " + (prefs.book ? "פעיל" : "כבוי")
+      }
+
+      function slugify(text) {
+        const t = String(text || "").trim()
+        return t
+          .replace(/\s+/g, "-")
+          .replace(/[^\u0590-\u05FFa-zA-Z0-9\-]/g, "")
+          .slice(0, 80) || ("sec-" + Math.random().toString(16).slice(2))
+      }
+
+      function extractChapterLabel(h2Text) {
+        const t = String(h2Text || "").trim()
+        const m = t.match(/פרק\s+(.+)$/)
+        return m ? ("פרק " + m[1].trim()) : t
+      }
+
+      function extractVerseLabel(h3Text) {
+        const t = String(h3Text || "").trim()
+        const m = t.match(/פסוק\s+(.+)$/)
+        return m ? ("פסוק " + m[1].trim()) : t
+      }
+
+      function buildNavFromHeadings() {
+        const content = document.getElementById("content")
+        const h2s = Array.from(content.querySelectorAll("h2"))
+        const h3s = Array.from(content.querySelectorAll("h3"))
+
+        // אם אין כותרות פרק/פסוק, לא מפעילים ניווט
+        const hasChapters = h2s.some(h => /פרק\s+/i.test(h.textContent || ""))
+        const hasVerses = h3s.some(h => /פסוק\s+/i.test(h.textContent || ""))
+        if (!hasChapters && !hasVerses) return
+
+        // נותנים id ל-h2/h3 כדי שנוכל לקפוץ
+        h2s.forEach((h, idx) => {
+          if (!h.id) h.id = "ch-" + idx + "-" + slugify(h.textContent)
+        })
+        h3s.forEach((h, idx) => {
+          if (!h.id) h.id = "v-" + idx + "-" + slugify(h.textContent)
+        })
+
+        // בונים מבנה פרקים->פסוקים (פסוקים משויכים לפרק האחרון שלפניהם)
+        const chapters = []
+        let current = null
+
+        // נלך על כל האלמנטים לפי סדר מסמך: h2/h3
+        const nodes = Array.from(content.querySelectorAll("h2, h3"))
+        nodes.forEach((n) => {
+          const tag = n.tagName
+          const txt = (n.textContent || "").trim()
+
+          if (tag === "H2" && /פרק\s+/i.test(txt)) {
+            current = {
+              id: n.id,
+              label: extractChapterLabel(txt),
+              verses: []
+            }
+            chapters.push(current)
+          } else if (tag === "H3" && /פסוק\s+/i.test(txt)) {
+            const v = { id: n.id, label: extractVerseLabel(txt) }
+            if (!current) {
+              // אם אין פרק, נשים בפרק דמה
+              current = { id: "", label: "ללא פרק", verses: [] }
+              chapters.push(current)
+            }
+            current.verses.push(v)
+          }
+        })
+
+        // רכיבי UI
+        const chapterSel = document.getElementById("chapterSel")
+        const verseSel = document.getElementById("verseSel")
+        const btnTop = document.getElementById("btnTop")
+        const navHint = document.getElementById("navHint")
+
+        navHint.style.display = "block"
+        chapterSel.style.display = "inline-block"
+        verseSel.style.display = "inline-block"
+        btnTop.style.display = "inline-block"
+
+        // אופציות פרקים
+        chapterSel.innerHTML = ""
+        const opt0 = document.createElement("option")
+        opt0.value = ""
+        opt0.textContent = "בחר פרק…"
+        chapterSel.appendChild(opt0)
+
+        chapters.forEach((ch, i) => {
+          const opt = document.createElement("option")
+          opt.value = String(i)
+          opt.textContent = ch.label || ("פרק " + (i + 1))
+          chapterSel.appendChild(opt)
+        })
+
+        function fillVerses(chIndex) {
+          verseSel.innerHTML = ""
+          const o0 = document.createElement("option")
+          o0.value = ""
+          o0.textContent = "בחר פסוק…"
+          verseSel.appendChild(o0)
+
+          const ch = chapters[chIndex]
+          if (!ch) return
+
+          // אם יש פרק אבל אין פסוקים – נסתיר תפריט פסוקים
+          if
