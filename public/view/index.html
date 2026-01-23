@@ -8,17 +8,20 @@
       :root{
         --fs: 18px;
         --lh: 1.8;
-        --pageMax: 980px;
+        --readerMax: 980px;
         --pad: 18px;
-        --tocW: 280px;
+
+        --drawerW: 340px;
       }
+
       body{
         font-family: system-ui, Arial;
         margin: 0;
         background: #fafafa;
       }
+
       body.book{
-        --pageMax: 760px;
+        --readerMax: 760px;
         --pad: 22px;
         --lh: 1.95;
       }
@@ -26,17 +29,19 @@
       .topbar{
         position: sticky;
         top: 0;
-        z-index: 20;
+        z-index: 30;
         background: #fafafa;
         border-bottom: 1px solid #eee;
         padding: 10px 12px;
       }
+
       .row{
         display: flex;
         gap: 8px;
         align-items: center;
         flex-wrap: wrap;
       }
+
       .spacer{ flex: 1; }
 
       .btn{
@@ -47,7 +52,9 @@
         background: #fff;
         cursor: pointer;
       }
+
       .btn:active{ transform: translateY(1px); }
+
       .pill{
         padding: 6px 10px;
         border: 1px solid #ddd;
@@ -56,6 +63,7 @@
         font-size: 12px;
         color: #444;
       }
+
       .select{
         padding: 8px 10px;
         border: 1px solid #ddd;
@@ -63,6 +71,7 @@
         background: #fff;
         font-size: 14px;
       }
+
       .meta{
         margin-top: 6px;
         font-size: 12px;
@@ -70,48 +79,13 @@
         word-break: break-all;
       }
 
-      .wrap{
-        max-width: calc(var(--pageMax) + var(--tocW) + 40px);
-        margin: 0 auto;
+      .page{
         padding: 14px 12px 22px 12px;
       }
 
-      .layout{
-        display: grid;
-        grid-template-columns: var(--tocW) 1fr;
-        gap: 14px;
-        align-items: start;
-      }
-
-      .toc{
-        position: sticky;
-        top: 86px;
-        max-height: calc(100vh - 110px);
-        overflow: auto;
-        background: #fff;
-        border: 1px solid #e5e5e5;
-        border-radius: 12px;
-        padding: 10px;
-      }
-      .toc h4{
-        margin: 0 0 8px 0;
-        font-size: 13px;
-        color: #444;
-      }
-      .toc a{
-        display: block;
-        padding: 6px 8px;
-        border-radius: 10px;
-        text-decoration: none;
-        color: #222;
-        font-size: 13px;
-      }
-      .toc a:hover{
-        background: #f3f3f3;
-      }
-      .toc .small{
-        color: #666;
-        font-size: 12px;
+      .reader{
+        max-width: var(--readerMax);
+        margin: 0 auto;
       }
 
       .card{
@@ -119,7 +93,6 @@
         border: 1px solid #e5e5e5;
         border-radius: 12px;
         padding: var(--pad);
-        max-width: var(--pageMax);
       }
 
       .loading{
@@ -131,11 +104,12 @@
         font-size: var(--fs);
         line-height: var(--lh);
       }
+
       .content h1{ font-size: 1.55em; margin: 0 0 10px 0; }
       .content h2{ font-size: 1.25em; margin: 18px 0 8px 0; }
       .content h3{ font-size: 1.08em; margin: 14px 0 6px 0; }
       .content p { margin: 10px 0; }
-      .content h2, .content h3{ scroll-margin-top: 110px; }
+      .content h2, .content h3{ scroll-margin-top: 120px; }
 
       .pre{
         white-space: pre-wrap;
@@ -162,10 +136,73 @@
         text-align: left;
       }
 
-      @media (max-width: 980px){
-        .layout{ grid-template-columns: 1fr; }
-        .toc{ position: static; max-height: none; }
-        .card{ max-width: none; }
+      /* Drawer (תוכן עניינים) */
+      .overlay{
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.25);
+        display: none;
+        z-index: 40;
+      }
+
+      .drawer{
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        width: min(var(--drawerW), 92vw);
+        background: #fff;
+        border-left: 1px solid #e5e5e5;
+        transform: translateX(110%);
+        transition: transform 160ms ease;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .drawer.open{
+        transform: translateX(0);
+      }
+
+      .overlay.open{
+        display: block;
+      }
+
+      .drawerTop{
+        padding: 10px 12px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .drawerTitle{
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .drawerBody{
+        padding: 10px;
+        overflow: auto;
+      }
+
+      .toc a{
+        display: block;
+        padding: 7px 10px;
+        border-radius: 10px;
+        text-decoration: none;
+        color: #222;
+        font-size: 13px;
+      }
+
+      .toc a:hover{
+        background: #f3f3f3;
+      }
+
+      .toc .small{
+        color: #666;
+        font-size: 12px;
+        padding: 6px 10px;
       }
     </style>
   </head>
@@ -175,17 +212,18 @@
       <div class="row">
         <button class="btn" onclick="history.back()">חזור</button>
         <button class="btn" id="btnRaw">פתח מקור (RAW)</button>
+        <button class="btn" id="btnToc" style="display:none;">תוכן עניינים</button>
 
         <span class="pill" id="fontLabel">גופן: —</span>
         <button class="btn" id="btnMinus" title="הקטן גופן">−</button>
         <button class="btn" id="btnPlus" title="הגדל גופן">+</button>
 
-        <button class="btn" id="btnBook" title="מצב עמוד ספר">עמוד ספר: כבוי</button>
+        <button class="btn" id="btnBook" title="מצב קריאה">עמוד ספר: כבוי</button>
 
         <span class="spacer"></span>
 
-        <button class="btn" id="btnPrev" style="display:none;">◀ פסוק קודם</button>
-        <button class="btn" id="btnNext" style="display:none;">פסוק הבא ▶</button>
+        <button class="btn" id="btnPrev" style="display:none;">◀ קודם</button>
+        <button class="btn" id="btnNext" style="display:none;">הבא ▶</button>
 
         <select class="select" id="chapterSel" style="display:none;"></select>
         <select class="select" id="verseSel" style="display:none;"></select>
@@ -195,26 +233,34 @@
       <div class="meta" id="meta"></div>
     </div>
 
-    <div class="wrap">
-      <div class="layout">
-        <aside class="toc" id="toc" style="display:none;">
-          <h4>תוכן עניינים</h4>
-          <div class="small" id="tocHint"></div>
-          <div id="tocList"></div>
-        </aside>
+    <div class="page">
+      <div class="reader">
+        <div class="card" id="card">
+          <div class="loading" id="loading">טוען…</div>
 
-        <main>
-          <div class="card" id="card">
-            <div class="loading" id="loading">טוען…</div>
-
-            <div class="content" id="content" style="display:none;"></div>
-            <pre class="pre" id="pre" style="display:none;"></pre>
-            <div class="err" id="err" style="display:none;"></div>
-            <iframe id="pdf" style="display:none;"></iframe>
-          </div>
-        </main>
+          <div class="content" id="content" style="display:none;"></div>
+          <pre class="pre" id="pre" style="display:none;"></pre>
+          <div class="err" id="err" style="display:none;"></div>
+          <iframe id="pdf" style="display:none;"></iframe>
+        </div>
       </div>
     </div>
+
+    <div class="overlay" id="overlay"></div>
+
+    <aside class="drawer" id="drawer">
+      <div class="drawerTop">
+        <div class="drawerTitle">תוכן עניינים</div>
+        <span class="spacer"></span>
+        <button class="btn" id="btnCloseToc">סגור</button>
+      </div>
+      <div class="drawerBody">
+        <div class="toc">
+          <div class="small" id="tocHint"></div>
+          <div id="tocList"></div>
+        </div>
+      </div>
+    </aside>
 
     <script>
       function encodePath(path){
@@ -277,8 +323,21 @@
 
       function textOf(el){ return String(el && el.textContent ? el.textContent : "").trim() }
 
-      function isChapter(t){ return /^פרק\s+/i.test(t) }
-      function isVerse(t){ return /^פסוק\s+/i.test(t) }
+      function scrollToId(id){
+        const el = document.getElementById(id)
+        if (!el) return
+        el.scrollIntoView({ behavior: "smooth", block: "start" })
+      }
+
+      // Drawer control
+      function openToc(){
+        document.getElementById("overlay").classList.add("open")
+        document.getElementById("drawer").classList.add("open")
+      }
+      function closeToc(){
+        document.getElementById("overlay").classList.remove("open")
+        document.getElementById("drawer").classList.remove("open")
+      }
 
       function buildNav(){
         const content = document.getElementById("content")
@@ -292,40 +351,42 @@
           const n = nodes[i]
           const t = textOf(n)
 
-          if (n.tagName === "H2" && isChapter(t)){
-            if (!n.id) n.id = "ch-" + chapters.length + "-" + slug(t)
+          // כותרות "רמה 2"
+          if (n.tagName === "H2") {
+            if (!n.id) n.id = "h2-" + chapters.length + "-" + slug(t)
             currentChapterIndex = chapters.length
             chapters.push({ id: n.id, label: t, verses: [] })
           }
 
-          if (n.tagName === "H3" && isVerse(t)){
-            if (!n.id) n.id = "v-" + verses.length + "-" + slug(t)
+          // כותרות "רמה 3"
+          if (n.tagName === "H3") {
+            if (!n.id) n.id = "h3-" + verses.length + "-" + slug(t)
             const v = { id: n.id, label: t, chapterIndex: currentChapterIndex }
             verses.push(v)
             if (currentChapterIndex >= 0) chapters[currentChapterIndex].verses.push(v)
           }
         }
 
-        const hasNav = chapters.length > 0 || verses.length > 0
-        if (!hasNav) return { chapters: [], verses: [] }
+        if (chapters.length === 0 && verses.length === 0) return { chapters: [], verses: [] }
 
-        // Selects
+        // Enable controls
+        document.getElementById("btnToc").style.display = "inline-block"
+        document.getElementById("btnTop").style.display = "inline-block"
+        document.getElementById("btnPrev").style.display = "inline-block"
+        document.getElementById("btnNext").style.display = "inline-block"
+        document.getElementById("chapterSel").style.display = "inline-block"
+        document.getElementById("verseSel").style.display = "inline-block"
+
         const chapterSel = document.getElementById("chapterSel")
         const verseSel = document.getElementById("verseSel")
         const btnTop = document.getElementById("btnTop")
         const btnPrev = document.getElementById("btnPrev")
         const btnNext = document.getElementById("btnNext")
 
-        chapterSel.style.display = "inline-block"
-        verseSel.style.display = "inline-block"
-        btnTop.style.display = "inline-block"
-        btnPrev.style.display = "inline-block"
-        btnNext.style.display = "inline-block"
-
         chapterSel.innerHTML = ""
         const opt0 = document.createElement("option")
         opt0.value = ""
-        opt0.textContent = "בחר פרק…"
+        opt0.textContent = "בחר כותרת…"
         chapterSel.appendChild(opt0)
 
         chapters.forEach((ch, idx) => {
@@ -335,34 +396,27 @@
           chapterSel.appendChild(o)
         })
 
-        function fillVerses(chIdx){
+        function fillSub(idx){
           verseSel.innerHTML = ""
           const o0 = document.createElement("option")
           o0.value = ""
-          o0.textContent = "בחר פסוק…"
+          o0.textContent = "בחר תת-כותרת…"
           verseSel.appendChild(o0)
 
-          const ch = chapters[chIdx]
+          const ch = chapters[idx]
           if (!ch || !ch.verses || ch.verses.length === 0) return
-
-          ch.verses.forEach((v, idx) => {
+          ch.verses.forEach((v, j) => {
             const o = document.createElement("option")
-            o.value = String(idx)
+            o.value = String(j)
             o.textContent = v.label
             verseSel.appendChild(o)
           })
         }
 
-        function scrollToId(id){
-          const el = document.getElementById(id)
-          if (!el) return
-          el.scrollIntoView({ behavior: "smooth", block: "start" })
-        }
-
         chapterSel.onchange = () => {
           const idx = Number(chapterSel.value)
           if (!Number.isFinite(idx)) return
-          fillVerses(idx)
+          fillSub(idx)
           scrollToId(chapters[idx].id)
         }
 
@@ -377,11 +431,11 @@
 
         btnTop.onclick = () => window.scrollTo({ top: 0, behavior: "smooth" })
 
-        // Prev/Next verse (לפי כל הפסוקים שנמצאו)
-        let currentVerseIndex = -1
-        function setCurrentVerseByScroll(){
-          // משוער: מחפש פסוק קרוב לראש הדף
-          const topY = window.scrollY + 130
+        // Prev/Next over H3 list (אם יש)
+        let currentV = -1
+        function setCurrentByScroll(){
+          if (verses.length === 0) return
+          const topY = window.scrollY + 140
           let best = -1
           for (let i = 0; i < verses.length; i++){
             const el = document.getElementById(verses[i].id)
@@ -390,42 +444,38 @@
             if (y <= topY) best = i
             else break
           }
-          currentVerseIndex = best
+          currentV = best
         }
 
         btnPrev.onclick = () => {
           if (verses.length === 0) return
-          if (currentVerseIndex <= 0) scrollToId(verses[0].id)
-          else scrollToId(verses[currentVerseIndex - 1].id)
+          if (currentV <= 0) scrollToId(verses[0].id)
+          else scrollToId(verses[currentV - 1].id)
         }
+
         btnNext.onclick = () => {
           if (verses.length === 0) return
-          if (currentVerseIndex < 0) scrollToId(verses[0].id)
-          else if (currentVerseIndex + 1 >= verses.length) scrollToId(verses[verses.length - 1].id)
-          else scrollToId(verses[currentVerseIndex + 1].id)
+          if (currentV < 0) scrollToId(verses[0].id)
+          else if (currentV + 1 >= verses.length) scrollToId(verses[verses.length - 1].id)
+          else scrollToId(verses[currentV + 1].id)
         }
 
-        window.addEventListener("scroll", () => setCurrentVerseByScroll(), { passive: true })
-        setCurrentVerseByScroll()
+        window.addEventListener("scroll", () => setCurrentByScroll(), { passive: true })
+        setCurrentByScroll()
 
-        // Sidebar TOC
-        const toc = document.getElementById("toc")
+        // Drawer TOC
         const tocList = document.getElementById("tocList")
         const tocHint = document.getElementById("tocHint")
-        toc.style.display = "block"
         tocList.innerHTML = ""
-
-        tocHint.textContent =
-          "נמצאו " + chapters.length + " פרקים, " + verses.length + " פסוקים."
+        tocHint.textContent = "כותרות: " + chapters.length + " | תת-כותרות: " + verses.length
 
         chapters.forEach((ch) => {
           const a = document.createElement("a")
           a.href = "#" + ch.id
           a.textContent = ch.label
-          a.onclick = (e) => { e.preventDefault(); scrollToId(ch.id) }
+          a.onclick = (e) => { e.preventDefault(); closeToc(); scrollToId(ch.id) }
           tocList.appendChild(a)
 
-          // פסוקים תחת פרק (מקטין עומס: עד 40)
           const max = 40
           const count = ch.verses ? ch.verses.length : 0
           const show = Math.min(count, max)
@@ -437,15 +487,14 @@
             av.textContent = "  " + v.label
             av.style.paddingRight = "18px"
             av.style.color = "#444"
-            av.onclick = (e) => { e.preventDefault(); scrollToId(v.id) }
+            av.onclick = (e) => { e.preventDefault(); closeToc(); scrollToId(v.id) }
             tocList.appendChild(av)
           }
 
           if (count > max){
             const more = document.createElement("div")
             more.className = "small"
-            more.style.padding = "6px 8px"
-            more.textContent = "… ועוד " + (count - max) + " פסוקים"
+            more.textContent = "… ועוד " + (count - max) + " תת-כותרות"
             tocList.appendChild(more)
           }
         })
@@ -475,6 +524,10 @@
           savePrefs(p)
           applyPrefs(p)
         }
+
+        document.getElementById("btnToc").onclick = () => openToc()
+        document.getElementById("btnCloseToc").onclick = () => closeToc()
+        document.getElementById("overlay").onclick = () => closeToc()
 
         const path = getParam("path")
         const meta = document.getElementById("meta")
@@ -516,7 +569,6 @@
         }
 
         const text = await r.text()
-
         loading.style.display = "none"
 
         if (looksLikeHtml(text)){
@@ -526,7 +578,6 @@
             content.innerHTML = safe
             buildNav()
           } else {
-            // fallback אם יצא ריק אחרי סינון
             pre.style.display = "block"
             pre.textContent = text
           }
