@@ -112,7 +112,7 @@
       function openInNewTab(path) {
         const p = String(path || "").trim()
         if (!p) return
-        const viewer = "/view.html?path=" + encodeURIComponent(p)
+        const viewer = "/view?path=" + encodeURIComponent(p)
         refreshLink(viewer)
         window.open(viewer, "_blank", "noopener,noreferrer")
       }
@@ -121,12 +121,13 @@
       function viewInline(path) {
         const p = String(path || "").trim()
         if (!p) return
-        const viewerUrl = "/view.html?path=" + encodeURIComponent(p)
+        const viewerUrl = "/view?path=" + encodeURIComponent(p)
         refreshLink(viewerUrl)
         showViewer()
         document.getElementById("viewer").src = viewerUrl
         document.getElementById("viewerWrap").scrollIntoView({ behavior: "smooth", block: "start" })
       }
+
 
 
       function openPathInNewTab() {
