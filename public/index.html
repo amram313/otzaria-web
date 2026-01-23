@@ -3,37 +3,39 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>ספרייה - קטלוג בסיסי</title>
+    <title>ספרייה - קטלוג</title>
     <style>
       body { font-family: system-ui, Arial; margin: 16px; }
       .row { margin-top: 10px; }
       .muted { color: #666; font-size: 13px; }
       input { width: 100%; padding: 10px; font-size: 16px; }
-      button { padding: 10px 12px; font-size: 14px; margin: 6px 6px 6px 0; }
+      button { padding: 10px 12px; font-size: 14px; margin: 6px 6px 6px 0; cursor: pointer; }
+      .btnSmall { padding: 6px 10px; font-size: 13px; margin: 0; }
       .grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
       .card { border: 1px solid #ddd; border-radius: 10px; padding: 10px; cursor: pointer; }
       .title { font-weight: 700; }
       .meta { margin-top: 6px; color: #444; font-size: 14px; }
       .path { margin-top: 6px; color: #888; font-size: 12px; direction: ltr; text-align: left; word-break: break-all; }
-      a { word-break: break-all; }
       .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
       .pill { padding: 4px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; color: #444; }
       .viewerWrap { display: none; margin-top: 12px; }
       iframe { width: 100%; height: 70vh; border: 1px solid #ddd; border-radius: 10px; }
       label { user-select: none; }
+      .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
     </style>
   </head>
+
   <body>
-    <h2>קטלוג בסיסי — הממשק אצלך, הקבצים נשארים ב־GitHub</h2>
+    <h2>קטלוג — פתיחה יציבה</h2>
     <div class="muted">
-      טוען metadata, טוען files_manifest, בונה מפת התאמות (hash→path וגם שם-קובץ→path),
-      ואז מאפשר פתיחה דרך <code>/lib/...</code>.
+      קליק על כרטיסייה פותח בטאב חדש (כדי שלא “יקפוץ” בין כרטיסיות). אם תרצה, יש גם “צפה כאן”.
     </div>
 
     <div class="row toolbar">
       <button id="btnLoad" onclick="loadCatalog()">טען קטלוג</button>
       <button onclick="scrollToResults()">לתוצאות</button>
-      <button onclick="openPath()">פתח נתיב ידני</button>
+      <button onclick="openPathInNewTab()">פתח נתיב ידני בטאב</button>
+      <button onclick="openPathInline()">צפה בנתיב ידני כאן</button>
       <button onclick="ping()">בדיקה: /api/ping</button>
 
       <label class="pill">
@@ -48,20 +50,21 @@
       <input id="q" placeholder="חיפוש (כותרת/מחבר/נתיב)..." oninput="onSearchInput()" />
     </div>
 
-    <h3 id="resultsTitle" style="margin-top:16px;">תוצאות</h3>
-    <div id="results" class="grid"></div>
-
     <div class="row">
-      <input id="path" placeholder="נתיב ידני בתוך הריפו (למשל: אוצריא/.../קובץ.pdf)" />
+      <input id="path" placeholder="נתיב ידני בתוך הריפו (למשל: .../file.pdf)" />
       <div class="muted">
         קישור נוכחי: <a id="link" href="#" target="_blank" rel="noreferrer">—</a>
       </div>
     </div>
 
+    <!-- Viewer נמצא למעלה כדי שלא יגרום לגלילה/טעינת עוד כרטיסיות -->
     <div id="viewerWrap" class="viewerWrap">
-      <h3 style="margin-top:0;">צפייה</h3>
+      <h3 style="margin: 0 0 8px 0;">צפייה בתוך הדף</h3>
       <iframe id="viewer" title="viewer"></iframe>
     </div>
+
+    <h3 id="resultsTitle" style="margin-top:16px;">תוצאות</h3>
+    <div id="results" class="grid"></div>
 
     <script>
       let items = []
@@ -106,9 +109,15 @@
         a.href = url || "#"
       }
 
-      function openPath() {
-        const p = document.getElementById("path").value.trim()
-        const url = libUrl(p)
+      function openInNewTab(path) {
+        const url = libUrl(path)
+        if (!url) return
+        refreshLink(url)
+        window.open(url, "_blank", "noopener,noreferrer")
+      }
+
+      function viewInline(path) {
+        const url = libUrl(path)
         if (!url) return
         refreshLink(url)
         showViewer()
@@ -116,23 +125,14 @@
         document.getElementById("viewerWrap").scrollIntoView({ behavior: "smooth", block: "start" })
       }
 
-      function openItem(it) {
-        if (!it.path) {
-          // מציג דיבאג מינימלי (בלי להפיל אותך לתוך קונסול)
-          const dbg = it._dbg ? it._dbg.slice(0, 20).join("\n") : ""
-          alert(
-            "אין נתיב לפתיחה עבור פריט זה.\n\n" +
-            "דיבאג (ערכים שזוהו מתוך metadata):\n" +
-            (dbg ? dbg : "(לא זוהו ערכים שימושיים)")
-          )
-          return
-        }
-        document.getElementById("path").value = it.path || ""
-        const url = libUrl(it.path)
-        refreshLink(url)
-        showViewer()
-        document.getElementById("viewer").src = url
-        document.getElementById("viewerWrap").scrollIntoView({ behavior: "smooth", block: "start" })
+      function openPathInNewTab() {
+        const p = document.getElementById("path").value.trim()
+        openInNewTab(p)
+      }
+
+      function openPathInline() {
+        const p = document.getElementById("path").value.trim()
+        viewInline(p)
       }
 
       function escapeHtml(s) {
@@ -143,8 +143,6 @@
           .replaceAll('"', "&quot;")
           .replaceAll("'", "&#039;")
       }
-
-      // ---------- זיהויים
 
       function looksLikePath(s) {
         const x = String(s || "").trim()
@@ -186,18 +184,6 @@
         return x.replace(/\.[a-z0-9]{2,6}$/i, "")
       }
 
-      function normalizeTextKey(s) {
-        // לניסיון התאמה "כותרת -> שם קובץ"
-        return String(s || "")
-          .toLowerCase()
-          .replace(/[\u0590-\u05FF]/g, (ch) => ch) // שומר עברית כמו שהיא
-          .replace(/[^\p{L}\p{N}]+/gu, " ")        // כל לא-אות/מספר -> רווח
-          .trim()
-          .replace(/\s+/g, " ")
-      }
-
-      // ---------- טעינת JSON (מעדיף /api ואם אין אז /lib)
-
       async function fetchJsonAny(urls) {
         let lastErr = null
         for (const u of urls) {
@@ -212,16 +198,11 @@
         throw lastErr || new Error("fetch failed")
       }
 
-      // ---------- חילוץ metadata לרשימה
-
       function objectToArrayMap(obj) {
         const arr = []
         for (const [k, v] of Object.entries(obj || {})) {
-          if (v && typeof v === "object") {
-            arr.push({ ...v, _key: k })
-          } else {
-            arr.push({ title: String(v ?? "").trim(), _key: k })
-          }
+          if (v && typeof v === "object") arr.push({ ...v, _key: k })
+          else arr.push({ title: String(v ?? "").trim(), _key: k })
         }
         return arr
       }
@@ -283,19 +264,10 @@
 
       function normalizeMetaItem(x) {
         const o = (x && typeof x === "object") ? x : {}
-
-        const titleVal =
-          getAny(o, ["title", "name", "he_title", "heb_title", "book", "display", "caption"]) ?? ""
-
-        const authorVal =
-          getAny(o, ["author", "authors", "by", "creator", "writer", "mechaber"]) ?? ""
-
-        const pathVal =
-          getAny(o, ["path", "file", "filename", "relpath", "uri", "url", "href"]) ?? ""
-
-        const idVal =
-          getAny(o, ["id", "book_id", "bookId", "file_id", "fileId", "filehash", "hash", "sha", "sha1", "sha256", "md5", "uuid", "guid"]) ??
-          (o._key ?? "")
+        const titleVal = getAny(o, ["title", "name", "he_title", "heb_title", "book", "display", "caption"]) ?? ""
+        const authorVal = getAny(o, ["author", "authors", "by", "creator", "writer"]) ?? ""
+        const pathVal = getAny(o, ["path", "file", "filename", "relpath", "uri", "url", "href"]) ?? ""
+        const idVal = getAny(o, ["id", "book_id", "bookId", "file_id", "fileId", "filehash", "hash", "sha", "sha1", "sha256", "md5"]) ?? (o._key ?? "")
 
         const title = Array.isArray(titleVal) ? titleVal.join(" ") : titleVal
         const author = Array.isArray(authorVal) ? authorVal.join(", ") : authorVal
@@ -307,12 +279,9 @@
           path: String(path || "").trim(),
           id: String(idVal ?? "").trim(),
           _key: String(o._key || "").trim(),
-          _raw: o,
-          _dbg: []
+          _raw: o
         }
       }
-
-      // ---------- סריקה עמוקה: אוספים כל מחרוזת שימושית מתוך metadata
 
       function deepCollectStrings(root, maxDepth = 5, maxItems = 250) {
         const out = []
@@ -330,7 +299,6 @@
         function walk(node, depth) {
           if (out.length >= maxItems) return
           if (depth > maxDepth) return
-
           if (node == null) return
 
           const t = typeof node
@@ -338,7 +306,6 @@
             push(node)
             return
           }
-
           if (Array.isArray(node)) {
             for (let i = 0; i < node.length; i++) {
               walk(node[i], depth + 1)
@@ -346,7 +313,6 @@
             }
             return
           }
-
           if (t === "object") {
             for (const [k, v] of Object.entries(node)) {
               push(k)
@@ -359,8 +325,6 @@
         walk(root, 0)
         return out
       }
-
-      // ---------- manifest: בונים מפות
 
       function extractManifestEntries(manifestJson) {
         if (!manifestJson || typeof manifestJson !== "object") return []
@@ -385,20 +349,18 @@
           push(val)
           return out
         }
-
         if (val && typeof val === "object") {
           for (const v of Object.values(val)) {
             if (typeof v === "string") push(v)
           }
         }
-
         return out
       }
 
       async function buildManifestMaps(manifestJson, onProgress) {
         const hashToPath = new Map()
-        const baseToPath = new Map()   // basename -> full path
-        const stemToPath = new Map()   // stem -> full path
+        const baseToPath = new Map()
+        const stemToPath = new Map()
         const entries = extractManifestEntries(manifestJson)
         const total = entries.length
 
@@ -407,22 +369,17 @@
           const kStr = String(k || "").trim()
           const vStrings = collectStringsFromValue(vRaw)
 
-          // קובעים מהו path (מהצד שנראה כמו נתיב)
           let path = ""
-          if (looksLikePath(kStr)) {
-            path = kStr
-          } else {
+          if (looksLikePath(kStr)) path = kStr
+          else {
             for (const s of vStrings) {
               if (looksLikePath(s)) { path = s; break }
             }
           }
 
-          // ממפים:
-          // 1) hash -> path (משני הצדדים, אם נראה hashish)
           if (path) {
             const b = basenameOf(path).toLowerCase()
             const st = stemOfFilename(b).toLowerCase()
-
             if (b && !baseToPath.has(b)) baseToPath.set(b, path)
             if (st && !stemToPath.has(st)) stemToPath.set(st, path)
 
@@ -430,18 +387,15 @@
               const hk = normHashish(kStr)
               if (hk && !hashToPath.has(hk)) hashToPath.set(hk, path)
             }
-
             for (const s of vStrings) {
               if (looksLikeHashish(s)) {
                 const hv = normHashish(s)
                 if (hv && !hashToPath.has(hv)) hashToPath.set(hv, path)
               }
-
-              // גם אם metadata מחזיר רק basename
               const bb = basenameOf(s).toLowerCase()
               const sst = stemOfFilename(bb).toLowerCase()
-              if (bb && !baseToPath.has(bb) && looksLikePath(path)) baseToPath.set(bb, path)
-              if (sst && !stemToPath.has(sst) && looksLikePath(path)) stemToPath.set(sst, path)
+              if (bb && !baseToPath.has(bb)) baseToPath.set(bb, path)
+              if (sst && !stemToPath.has(sst)) stemToPath.set(sst, path)
             }
           }
 
@@ -452,57 +406,33 @@
         }
 
         if (onProgress) onProgress(total, total)
-        return { hashToPath, baseToPath, stemToPath, total }
+        return { hashToPath, baseToPath, stemToPath }
       }
 
       function resolvePathForMeta(meta, maps) {
-        // 1) אם כבר יש path מפורש
         if (looksLikePath(meta.path)) return meta.path
 
-        const dbg = []
-
-        // 2) מועמדים מתוך metadata (עמוק)
         const strings = deepCollectStrings(meta._raw, 5, 220)
-        for (const s of strings) {
-          if (looksLikeHashish(s)) dbg.push("hash: " + s)
-          else if (looksLikePath(s)) dbg.push("pathish: " + s)
-        }
 
-        // 2a) נסה hash -> path
         for (const s of strings) {
           if (!looksLikeHashish(s)) continue
           const h = normHashish(s)
           if (h && maps.hashToPath.has(h)) return maps.hashToPath.get(h)
         }
 
-        // 2b) נסה basename -> path
         for (const s of strings) {
           const b = basenameOf(s).toLowerCase()
           if (b && maps.baseToPath.has(b)) return maps.baseToPath.get(b)
         }
 
-        // 2c) נסה stem -> path
         for (const s of strings) {
           const b = basenameOf(s).toLowerCase()
           const st = stemOfFilename(b).toLowerCase()
           if (st && maps.stemToPath.has(st)) return maps.stemToPath.get(st)
         }
 
-        // 3) fallback: התאמה לפי כותרת (אם שמות קבצים דומים לכותרת)
-        const t = normalizeTextKey(meta.title)
-        if (t) {
-          const st = t.replace(/\s+/g, " ").trim()
-          const st2 = st.replaceAll(" ", "")
-          // מנסים כמה וריאציות מול stem map
-          if (maps.stemToPath.has(st)) return maps.stemToPath.get(st)
-          if (maps.stemToPath.has(st2)) return maps.stemToPath.get(st2)
-        }
-
-        meta._dbg = dbg
         return ""
       }
-
-      // ---------- UI
 
       async function buildIndex(list, onProgress) {
         const out = []
@@ -534,15 +464,58 @@
 
         for (let i = renderCursor; i < end; i++) {
           const it = currentList[i]
-          const div = document.createElement("div")
-          div.className = "card"
-          div.innerHTML = `
-            <div class="title">${escapeHtml(it.title || "(ללא כותרת)")}</div>
-            <div class="meta">${escapeHtml(it.author || "")}</div>
-            <div class="path">${escapeHtml(it.path || "(אין נתיב)")}</div>
-          `
-          div.onclick = () => openItem(it)
-          root.appendChild(div)
+
+          const card = document.createElement("div")
+          card.className = "card"
+
+          const t = document.createElement("div")
+          t.className = "title"
+          t.textContent = it.title || "(ללא כותרת)"
+
+          const m = document.createElement("div")
+          m.className = "meta"
+          m.textContent = it.author || ""
+
+          const p = document.createElement("div")
+          p.className = "path"
+          p.textContent = it.path || "(אין נתיב)"
+
+          const actions = document.createElement("div")
+          actions.className = "actions"
+
+          const btnView = document.createElement("button")
+          btnView.className = "btnSmall"
+          btnView.textContent = "צפה כאן"
+          btnView.onclick = (e) => {
+            e.stopPropagation()
+            if (!it.path) return
+            viewInline(it.path)
+          }
+
+          const btnOpen = document.createElement("button")
+          btnOpen.className = "btnSmall"
+          btnOpen.textContent = "פתח בטאב"
+          btnOpen.onclick = (e) => {
+            e.stopPropagation()
+            if (!it.path) return
+            openInNewTab(it.path)
+          }
+
+          actions.appendChild(btnView)
+          actions.appendChild(btnOpen)
+
+          // קליק על כל הכרטיס = פתיחה בטאב (מונע “קפיצות”)
+          card.onclick = () => {
+            if (!it.path) return
+            openInNewTab(it.path)
+          }
+
+          card.appendChild(t)
+          card.appendChild(m)
+          card.appendChild(p)
+          card.appendChild(actions)
+
+          root.appendChild(card)
         }
 
         renderCursor = end
@@ -584,7 +557,7 @@
           const rawMetaItems = extractBestCollection(metaJson)
           if (!rawMetaItems.length) {
             setStatus("נטען metadata אבל לא זוהתה רשימה")
-            alert("נטען metadata.json אבל לא הצלחתי לחלץ ממנו רשימה.")
+            alert("לא הצלחתי לחלץ רשימת פריטים מתוך metadata.json")
             return
           }
 
@@ -605,12 +578,12 @@
             "/lib/files_manifest.json"
           ])
 
-          setStatus("בונה מפות מה־manifest... (0/?)")
+          setStatus("בונה מפות מה־manifest...")
           const maps = await buildManifestMaps(manifestJson, (done, total) => {
             setStatus(`בונה מפות מה־manifest... (${done}/${total})`)
           })
 
-          setStatus(`משלים נתיבים לכל metadata... (0/${normalized.length})`)
+          setStatus(`משלים נתיבים... (0/${normalized.length})`)
           let filled = 0
           for (let i = 0; i < normalized.length; i++) {
             const p = resolvePathForMeta(normalized[i], maps)
@@ -618,18 +591,15 @@
             if (normalized[i].path) filled++
 
             if (i % 1000 === 0) {
-              setStatus(`משלים נתיבים לכל metadata... (${i}/${normalized.length}) | נמצאו: ${filled}`)
+              setStatus(`משלים נתיבים... (${i}/${normalized.length}) | נמצאו: ${filled}`)
               await tick()
             }
           }
-          setStatus(`משלים נתיבים לכל metadata... (${normalized.length}/${normalized.length}) | נמצאו: ${filled}`)
+          setStatus(`משלים נתיבים... (${normalized.length}/${normalized.length}) | נמצאו: ${filled}`)
 
-          setStatus(`בונה אינדקס חיפוש... (0/${normalized.length})`)
-          items = await buildIndex(normalized, (done, total) => {
-            setStatus(`בונה אינדקס חיפוש... (${done}/${total})`)
-          })
+          setStatus("בונה אינדקס חיפוש...")
+          items = await buildIndex(normalized, null)
 
-          // כברירת מחדל מציג רק עם קובץ
           document.getElementById("showAll").checked = false
           applySearch()
           scrollToResults()
