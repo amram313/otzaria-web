@@ -1,26 +1,39 @@
+function safeDecode(s) {
+  try {
+    return decodeURIComponent(String(s))
+  } catch (e) {
+    return String(s)
+  }
+}
 
 function encodePathSegments(segments) {
-  return segments.map((s) => encodeURIComponent(String(s))).join("/")
+  // מנקה קידוד כפול:
+  // אם מגיע "%D7%90..." -> נהפוך ל-"א..." ואז נקודד פעם אחת נכון.
+  return segments
+    .map((s) => safeDecode(s))
+    .map((s) => encodeURIComponent(String(s)))
+    .join("/")
 }
 
 export async function onRequest(context) {
   const { request, params } = context
 
-  // לפי הדוקס: [[param]] מחזיר מערך של סגמנטים :contentReference[oaicite:3]{index=3}
   const segs = Array.isArray(params.path) ? params.path : [params.path].filter(Boolean)
 
   if (segs.length === 0) {
     return new Response("Missing path", { status: 400 })
   }
 
-  // חסימה בסיסית לנתיבים מסוכנים
   if (segs.some((s) => String(s).includes(".."))) {
     return new Response("Bad path", { status: 400 })
   }
 
   const BRANCH = "main"
-  const upstreamBase = `https://raw.githubusercontent.com/amram313/otzaria-library/refs/heads/${BRANCH}/`
-  const upstreamUrl = upstreamBase + encodePathSegments(segs)
+  const upstreamBase =
+    `https://raw.githubusercontent.com/amram313/otzaria-library/refs/heads/${BRANCH}/`
+
+  const relPath = encodePathSegments(segs)
+  const upstreamUrl = upstreamBase + relPath
 
   // תומך Range (חשוב ל-PDF). אם יש Range – לא מקשיחים cache.
   const hasRange = request.headers.has("range")
@@ -37,7 +50,12 @@ export async function onRequest(context) {
   })
 
   if (!upstreamResp.ok) {
-    return new Response(`Upstream error: ${upstreamResp.status}`, { status: 502 })
+    // מחזיר גם את הכתובת שאליה ניסינו לגשת כדי שתראה מה נשבר
+    const msg =
+      `Upstream error: ${upstreamResp.status}\n` +
+      `Upstream URL: ${upstreamUrl}\n` +
+      `Rel path: ${relPath}\n`
+    return new Response(msg, { status: 502 })
   }
 
   const resp = new Response(upstreamResp.body, upstreamResp)
