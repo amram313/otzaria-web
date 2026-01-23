@@ -341,165 +341,113 @@
 
       function buildNav(){
         const content = document.getElementById("content")
-        const nodes = Array.from(content.querySelectorAll("h2, h3"))
+        const nodes = Array.from(content.querySelectorAll("h1, h2, h3, h4"))
+          .filter(n => textOf(n))
 
-        const chapters = []
-        const verses = []
-        let currentChapterIndex = -1
+        if (nodes.length === 0) return { items: [], steps: [] }
 
-        for (let i = 0; i < nodes.length; i++){
-          const n = nodes[i]
-          const t = textOf(n)
+        // נותנים id לכל כותרת כדי שנוכל לקפוץ אליה
+        const items = nodes.map((n, idx) => {
+          const level = Number(String(n.tagName).slice(1)) // H1 -> 1 וכו'
+          if (!n.id) n.id = "h" + level + "-" + idx + "-" + slug(textOf(n))
+          return { id: n.id, label: textOf(n), level }
+        })
 
-          // כותרות "רמה 2"
-          if (n.tagName === "H2") {
-            if (!n.id) n.id = "h2-" + chapters.length + "-" + slug(t)
-            currentChapterIndex = chapters.length
-            chapters.push({ id: n.id, label: t, verses: [] })
-          }
-
-          // כותרות "רמה 3"
-          if (n.tagName === "H3") {
-            if (!n.id) n.id = "h3-" + verses.length + "-" + slug(t)
-            const v = { id: n.id, label: t, chapterIndex: currentChapterIndex }
-            verses.push(v)
-            if (currentChapterIndex >= 0) chapters[currentChapterIndex].verses.push(v)
-          }
-        }
-
-        if (chapters.length === 0 && verses.length === 0) return { chapters: [], verses: [] }
-
-        // Enable controls
+        // הפעלה של כפתור תוכן עניינים + למעלה
         document.getElementById("btnToc").style.display = "inline-block"
         document.getElementById("btnTop").style.display = "inline-block"
-        document.getElementById("btnPrev").style.display = "inline-block"
-        document.getElementById("btnNext").style.display = "inline-block"
-        document.getElementById("chapterSel").style.display = "inline-block"
-        document.getElementById("verseSel").style.display = "inline-block"
 
-        const chapterSel = document.getElementById("chapterSel")
-        const verseSel = document.getElementById("verseSel")
-        const btnTop = document.getElementById("btnTop")
+        // Prev/Next: נעדיף לדפדף לפי H3 (אם יש), אחרת H2, אחרת כל הכותרות
+        const steps =
+          items.filter(x => x.level === 3).length > 1 ? items.filter(x => x.level === 3) :
+          items.filter(x => x.level === 2).length > 1 ? items.filter(x => x.level === 2) :
+          items
+
         const btnPrev = document.getElementById("btnPrev")
         const btnNext = document.getElementById("btnNext")
 
-        chapterSel.innerHTML = ""
-        const opt0 = document.createElement("option")
-        opt0.value = ""
-        opt0.textContent = "בחר כותרת…"
-        chapterSel.appendChild(opt0)
+        if (steps.length > 1) {
+          btnPrev.style.display = "inline-block"
+          btnNext.style.display = "inline-block"
+        } else {
+          btnPrev.style.display = "none"
+          btnNext.style.display = "none"
+        }
 
-        chapters.forEach((ch, idx) => {
-          const o = document.createElement("option")
-          o.value = String(idx)
-          o.textContent = ch.label
-          chapterSel.appendChild(o)
+        document.getElementById("btnTop").onclick = () => window.scrollTo({ top: 0, behavior: "smooth" })
+
+        // Drawer TOC (רשימה אחת עם הזחות לפי רמה)
+        const tocList = document.getElementById("tocList")
+        const tocHint = document.getElementById("tocHint")
+        tocList.innerHTML = ""
+
+        const c1 = items.filter(x => x.level === 1).length
+        const c2 = items.filter(x => x.level === 2).length
+        const c3 = items.filter(x => x.level === 3).length
+        const c4 = items.filter(x => x.level === 4).length
+        tocHint.textContent =
+          "H1: " + c1 + " | H2: " + c2 + " | H3: " + c3 + (c4 ? " | H4: " + c4 : "")
+
+        items.forEach((it) => {
+          const a = document.createElement("a")
+          a.href = "#" + it.id
+          a.textContent = it.label
+
+          // הזחה לפי רמה: H1=0px, H2=14px, H3=28px, H4=42px
+          const indent = (Math.max(1, it.level) - 1) * 14
+          a.style.paddingRight = (10 + indent) + "px"
+
+          // קצת “הדגשה” לרמות עליונות
+          if (it.level === 1) a.style.fontWeight = "700"
+          if (it.level >= 3) a.style.color = "#444"
+
+          a.onclick = (e) => {
+            e.preventDefault()
+            closeToc()
+            scrollToId(it.id)
+          }
+
+          tocList.appendChild(a)
         })
 
-        function fillSub(idx){
-          verseSel.innerHTML = ""
-          const o0 = document.createElement("option")
-          o0.value = ""
-          o0.textContent = "בחר תת-כותרת…"
-          verseSel.appendChild(o0)
+        // עדכון “נוכחי” לדפדוף (לפי steps)
+        let currentI = -1
 
-          const ch = chapters[idx]
-          if (!ch || !ch.verses || ch.verses.length === 0) return
-          ch.verses.forEach((v, j) => {
-            const o = document.createElement("option")
-            o.value = String(j)
-            o.textContent = v.label
-            verseSel.appendChild(o)
-          })
-        }
-
-        chapterSel.onchange = () => {
-          const idx = Number(chapterSel.value)
-          if (!Number.isFinite(idx)) return
-          fillSub(idx)
-          scrollToId(chapters[idx].id)
-        }
-
-        verseSel.onchange = () => {
-          const chIdx = Number(chapterSel.value)
-          const vIdx = Number(verseSel.value)
-          if (!Number.isFinite(chIdx) || !Number.isFinite(vIdx)) return
-          const ch = chapters[chIdx]
-          if (!ch || !ch.verses || !ch.verses[vIdx]) return
-          scrollToId(ch.verses[vIdx].id)
-        }
-
-        btnTop.onclick = () => window.scrollTo({ top: 0, behavior: "smooth" })
-
-        // Prev/Next over H3 list (אם יש)
-        let currentV = -1
         function setCurrentByScroll(){
-          if (verses.length === 0) return
+          if (steps.length === 0) return
           const topY = window.scrollY + 140
           let best = -1
-          for (let i = 0; i < verses.length; i++){
-            const el = document.getElementById(verses[i].id)
+
+          for (let i = 0; i < steps.length; i++){
+            const el = document.getElementById(steps[i].id)
             if (!el) continue
             const y = el.getBoundingClientRect().top + window.scrollY
             if (y <= topY) best = i
             else break
           }
-          currentV = best
+
+          currentI = best
         }
 
         btnPrev.onclick = () => {
-          if (verses.length === 0) return
-          if (currentV <= 0) scrollToId(verses[0].id)
-          else scrollToId(verses[currentV - 1].id)
+          if (steps.length === 0) return
+          if (currentI <= 0) scrollToId(steps[0].id)
+          else scrollToId(steps[currentI - 1].id)
         }
 
         btnNext.onclick = () => {
-          if (verses.length === 0) return
-          if (currentV < 0) scrollToId(verses[0].id)
-          else if (currentV + 1 >= verses.length) scrollToId(verses[verses.length - 1].id)
-          else scrollToId(verses[currentV + 1].id)
+          if (steps.length === 0) return
+          if (currentI < 0) scrollToId(steps[0].id)
+          else if (currentI + 1 >= steps.length) scrollToId(steps[steps.length - 1].id)
+          else scrollToId(steps[currentI + 1].id)
         }
 
         window.addEventListener("scroll", () => setCurrentByScroll(), { passive: true })
         setCurrentByScroll()
 
-        // Drawer TOC
-        const tocList = document.getElementById("tocList")
-        const tocHint = document.getElementById("tocHint")
-        tocList.innerHTML = ""
-        tocHint.textContent = "כותרות: " + chapters.length + " | תת-כותרות: " + verses.length
+        return { items, steps }
+      }
 
-        chapters.forEach((ch) => {
-          const a = document.createElement("a")
-          a.href = "#" + ch.id
-          a.textContent = ch.label
-          a.onclick = (e) => { e.preventDefault(); closeToc(); scrollToId(ch.id) }
-          tocList.appendChild(a)
-
-          const max = 40
-          const count = ch.verses ? ch.verses.length : 0
-          const show = Math.min(count, max)
-
-          for (let i = 0; i < show; i++){
-            const v = ch.verses[i]
-            const av = document.createElement("a")
-            av.href = "#" + v.id
-            av.textContent = "  " + v.label
-            av.style.paddingRight = "18px"
-            av.style.color = "#444"
-            av.onclick = (e) => { e.preventDefault(); closeToc(); scrollToId(v.id) }
-            tocList.appendChild(av)
-          }
-
-          if (count > max){
-            const more = document.createElement("div")
-            more.className = "small"
-            more.textContent = "… ועוד " + (count - max) + " תת-כותרות"
-            tocList.appendChild(more)
-          }
-        })
-
-        return { chapters, verses }
       }
 
       async function main(){
