@@ -110,20 +110,24 @@
       }
 
       function openInNewTab(path) {
-        const url = libUrl(path)
-        if (!url) return
-        refreshLink(url)
-        window.open(url, "_blank", "noopener,noreferrer")
+        const p = String(path || "").trim()
+        if (!p) return
+        const viewer = "/view.html?path=" + encodeURIComponent(p)
+        refreshLink(viewer)
+        window.open(viewer, "_blank", "noopener,noreferrer")
       }
 
+
       function viewInline(path) {
-        const url = libUrl(path)
-        if (!url) return
-        refreshLink(url)
+        const p = String(path || "").trim()
+        if (!p) return
+        const viewerUrl = "/view.html?path=" + encodeURIComponent(p)
+        refreshLink(viewerUrl)
         showViewer()
-        document.getElementById("viewer").src = url
+        document.getElementById("viewer").src = viewerUrl
         document.getElementById("viewerWrap").scrollIntoView({ behavior: "smooth", block: "start" })
       }
+
 
       function openPathInNewTab() {
         const p = document.getElementById("path").value.trim()
