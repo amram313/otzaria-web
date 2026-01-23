@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>צפייה</title>
+    <style>
+      body {
+        font-family: system-ui, Arial;
+        margin: 0;
+        padding: 16px;
+        background: #fafafa;
+      }
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+      }
+      .topbar {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      .btn {
+        padding: 8px 12px;
+        font-size: 14px;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        background: #fff;
+        cursor: pointer;
+      }
+      .meta {
+        font-size: 12px;
+        color: #666;
+        word-break: break-all;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #e5e5e5;
+        border-radius: 12px;
+        padding: 18px;
+      }
+      .content {
+        direction: rtl;
+        line-height: 1.7;
+        font-size: 18px;
+      }
+      .content h1 { font-size: 28px; margin: 0 0 10px 0; }
+      .content h2 { font-size: 22px; margin: 18px 0 8px 0; }
+      .content h3 { font-size: 19px; margin: 14px 0 6px 0; }
+      .content p  { margin: 10px 0; }
+      .content b, .content strong { font-weight: 700; }
+      .pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-size: 15px;
+        line-height: 1.6;
+        direction: rtl;
+      }
+      iframe {
+        width: 100%;
+        height: 80vh;
+        border: 1px solid #e5e5e5;
+        border-radius: 12px;
+        background: #fff;
+      }
+      .err {
+        color: #a00;
+        font-size: 14px;
+        white-space: pre-wrap;
+        direction: ltr;
+        text-align: left;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="topbar">
+        <button class="btn" onclick="history.back()">חזור</button>
+        <button class="btn" id="btnRaw">פתח מקור (RAW)</button>
+      </div>
+
+      <div class="meta" id="meta"></div>
+
+      <div class="card" id="card">
+        <div class="content" id="content"></div>
+        <pre class="pre" id="pre" style="display:none;"></pre>
+        <div class="err" id="err" style="display:none;"></div>
+        <iframe id="pdf" style="display:none;"></iframe>
+      </div>
+    </div>
+
+    <script>
+      function encodePath(path) {
+        return String(path)
+          .split("/")
+          .filter(Boolean)
+          .map(encodeURIComponent)
+          .join("/")
+      }
+
+      function getParam(name) {
+        const u = new URL(location.href)
+        return u.searchParams.get(name) || ""
+      }
+
+      function isPdf(path) {
+        return /\.pdf$/i.test(path || "")
+      }
+
+      function looksLikeHtml(text) {
+        const t = String(text || "")
+        return /<\/?(h1|h2|h3|p|b|strong|div|span)\b/i.test(t)
+      }
+
+      function sanitizeHtml(html) {
+        // בסיסי: מסיר script/style/iframe/object/embed/link ומנקה on* + javascript:
+        const doc = new DOMParser().parseFromString(String(html || ""), "text/html")
+
+        const kill = doc.querySelectorAll("script, style, iframe, object, embed, link")
+        kill.forEach((n) => n.remove())
+
+        const all = doc.querySelectorAll("*")
+        all.forEach((el) => {
+          // מוחק onClick/onLoad וכו'
+          for (const attr of Array.from(el.attributes)) {
+            const name = String(attr.name || "").toLowerCase()
+            const val = String(attr.value || "")
+            if (name.startsWith("on")) el.removeAttribute(attr.name)
+            if (name === "href" && /^\s*javascript:/i.test(val)) el.removeAttribute(attr.name)
+          }
+          // קישורים ייפתחו בטאב חדש
+          if (el.tagName === "A") {
+            el.setAttribute("target", "_blank")
+            el.setAttribute("rel", "noreferrer noopener")
+          }
+        })
+
+        return doc.body.innerHTML
+      }
+
+      async function main() {
+        const path = getParam("path")
+        const meta = document.getElementById("meta")
+        const content = document.getElementById("content")
+        const pre = document.getElementById("pre")
+        const err = document.getElementById("err")
+        const pdf = document.getElementById("pdf")
+        const btnRaw = document.getElementById("btnRaw")
+
+        if (!path) {
+          err.style.display = "block"
+          err.textContent = "Missing ?path="
+          return
+        }
+
+        meta.textContent = "path: " + path
+
+        // כפתור לפתיחת המקור דרך /lib (למי שרוצה)
+        btnRaw.onclick = () => {
+          const u = "/lib/" + encodePath(path)
+          window.open(u, "_blank", "noopener,noreferrer")
+        }
+
+        // PDF: iframe ישירות
+        if (isPdf(path)) {
+          pdf.style.display = "block"
+          pdf.src = "/lib/" + encodePath(path)
+          return
+        }
+
+        // טקסט/HTML: fetch ואז render
+        const url = "/lib/" + encodePath(path)
+
+        const r = await fetch(url, { cache: "no-store" })
+        if (!r.ok) {
+          err.style.display = "block"
+          err.textContent = "Fetch failed: " + r.status + "\n" + url
+          return
+        }
+
+        const text = await r.text()
+
+        if (looksLikeHtml(text)) {
+          content.innerHTML = sanitizeHtml(text)
+          pre.style.display = "none"
+        } else {
+          content.innerHTML = ""
+          pre.style.display = "block"
+          pre.textContent = text
+        }
+      }
+
+      main().catch((e) => {
+        const err = document.getElementById("err")
+        err.style.display = "block"
+        err.textContent = String(e && e.message ? e.message : e)
+      })
+    </script>
+  </body>
+</html>
