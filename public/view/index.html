@@ -204,14 +204,6 @@
         font-size: 12px;
         padding: 6px 10px;
       }
-
-      /* PDF export via print */
-      @media print {
-        .topbar, .overlay, .drawer { display: none !important; }
-        body { background: #fff !important; }
-        .page { padding: 0 !important; }
-        .card { border: none !important; }
-      }
     </style>
 
     <!-- חובה עבור EPUB + DOCX (Client-side) -->
@@ -225,7 +217,6 @@
         <button class="btn" id="btnRaw">פתח מקור (RAW)</button>
         <button class="btn" id="btnToc" style="display:none;">תוכן עניינים</button>
 
-        <!-- Export buttons -->
         <button class="btn" id="btnExportPdf" style="display:none;">ייצוא PDF</button>
         <button class="btn" id="btnExportDocx" style="display:none;">ייצוא DOCX</button>
         <button class="btn" id="btnExportEpub" style="display:none;">ייצוא EPUB</button>
@@ -279,7 +270,7 @@
     </aside>
 
     <script>
-      // ------------ State for export
+      // ------------ State
       let currentPath = ""
       let currentSafeHtml = ""
       let currentPlainText = ""
@@ -287,13 +278,16 @@
       function encodePath(path){
         return String(path).split("/").filter(Boolean).map(encodeURIComponent).join("/")
       }
+
       function getParam(name){
         const u = new URL(location.href)
         return u.searchParams.get(name) || ""
       }
+
       function isPdf(path){
         return /\.pdf$/i.test(path || "")
       }
+
       function looksLikeHtml(text){
         const t = String(text || "")
         return /<\/?(h1|h2|h3|p|b|strong|div|span)\b/i.test(t)
@@ -326,10 +320,12 @@
         const book = localStorage.getItem("view_book") === "1"
         return { fs: clamp(Number.isFinite(fs) ? fs : 18, 12, 34), book }
       }
+
       function savePrefs(p){
         localStorage.setItem("view_fs", String(p.fs))
         localStorage.setItem("view_book", p.book ? "1" : "0")
       }
+
       function applyPrefs(p){
         document.documentElement.style.setProperty("--fs", p.fs + "px")
         document.getElementById("fontLabel").textContent = "גופן: " + p.fs
@@ -355,6 +351,7 @@
         document.getElementById("overlay").classList.add("open")
         document.getElementById("drawer").classList.add("open")
       }
+
       function closeToc(){
         document.getElementById("overlay").classList.remove("open")
         document.getElementById("drawer").classList.remove("open")
@@ -464,7 +461,7 @@
       }
 
       // ==========================
-      // Export helpers (PDF/DOCX/EPUB)
+      // Export helpers
       // ==========================
       function requireJSZip() {
         if (!window.JSZip) {
@@ -510,52 +507,269 @@
         return t || "ספר"
       }
 
-      function exportPdfPrint() {
-        // המשתמש בוחר "Save as PDF" בדיאלוג ההדפסה
-        window.print()
+      // -------- PDF with page numbers in TOC (Paged.js)
+      function headingItemsForTocFromDom() {
+        const root = document.getElementById("content")
+        if (!root) return []
+        const hs = Array.from(root.querySelectorAll("h1,h2,h3,h4"))
+          .map((h) => {
+            const level = Number(String(h.tagName).slice(1))
+            const id = h.id || ""
+            const text = (h.textContent || "").trim()
+            return { level: Math.max(1, Math.min(4, level)), id, text }
+          })
+          .filter(x => x.id && x.text)
+        return hs
       }
 
-      function htmlToDocxBlocks() {
+      function buildNestedOlHtml(items) {
+        // nested <ol> לפי level
+        let html = "<ol>"
+        let cur = 1
+        let first = true
+
+        for (const it of items) {
+          const lvl = it.level
+
+          if (!first) {
+            if (lvl === cur) html += "</li>"
+            while (lvl < cur) { html += "</li></ol>"; cur-- }
+            while (lvl > cur) { html += "<ol>"; cur++ }
+          }
+
+          html += "<li><a href=\"#" + xmlEscape(it.id) + "\">" + xmlEscape(it.text) + "</a>"
+          first = false
+        }
+
+        while (cur > 1) { html += "</li></ol>"; cur-- }
+        html += (first ? "" : "</li>") + "</ol>"
+        return html
+      }
+
+      function exportPdfPaged() {
+        const root = document.getElementById("content")
+        const pre = document.getElementById("pre")
+        const title = getTitleFromContent()
+        const items = headingItemsForTocFromDom()
+        const tocOl = buildNestedOlHtml(items)
+
+        // בונים HTML חדש לחלון
+        const bookHtml = root && root.style.display !== "none"
+          ? root.innerHTML
+          : ("<pre>" + xmlEscape(pre ? pre.textContent : "") + "</pre>")
+
+        // Paged.js CDN (מומלץ להעתיק לקובץ מקומי אם תרצה יציבות מלאה):
+        const pagedJsUrl = "https://unpkg.com/pagedjs/dist/paged.polyfill.js"
+
+        const html =
+`<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>${xmlEscape(title)}</title>
+  <style>
+    body{
+      font-family: system-ui, Arial;
+      margin: 0;
+      padding: 0;
+      direction: rtl;
+    }
+
+    .wrap{
+      padding: 18px 18px 0 18px;
+    }
+
+    .tocTitle{
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 10px 0;
+    }
+
+    .toc{
+      page-break-after: always;
+    }
+
+    .toc ol{
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .toc li{
+      margin: 0;
+      padding: 0;
+    }
+
+    .toc a{
+      color: #000;
+      text-decoration: none;
+      display: block;
+      padding: 4px 0;
+    }
+
+    /* מספרי עמודים בטבלת תוכן באמצעות Paged.js + target-counter */
+    .toc a::after{
+      content: leader('.') target-counter(attr(href), page);
+      float: left; /* ב-RTL המספרים בצד שמאל */
+    }
+
+    h1{ font-size: 26px; margin: 0 0 10px 0; }
+    h2{ font-size: 21px; margin: 18px 0 8px 0; }
+    h3{ font-size: 18px; margin: 14px 0 6px 0; }
+
+    /* עימוד */
+    @page{
+      size: A4;
+      margin: 18mm 16mm 20mm 16mm;
+
+      @bottom-center{
+        content: counter(page) " / " counter(pages);
+        font-size: 10pt;
+      }
+    }
+
+    /* טקסט רגיל */
+    p{ margin: 10px 0; line-height: 1.8; font-size: 14pt; }
+    .content{ font-size: 14pt; line-height: 1.85; }
+    pre{ white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11pt; line-height: 1.6; }
+  </style>
+
+  <script>
+    // מונע auto כדי שנוכל לקרוא preview ואז print
+    window.PagedConfig = { auto: false };
+  </script>
+  <script src="${pagedJsUrl}"></script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="toc">
+      <div class="tocTitle">תוכן עניינים</div>
+      ${tocOl || "<div>אין כותרות</div>"}
+    </div>
+
+    <div class="content" id="content">
+      ${bookHtml}
+    </div>
+  </div>
+
+  <script>
+    (async () => {
+      try {
+        // מייצר paged preview (מחשב target-counter + leader + counters)
+        await PagedPolyfill.preview();
+
+        // פותח print dialog – המשתמש שומר כ-PDF
+        setTimeout(() => window.print(), 50);
+      } catch (e) {
+        alert("Paged.js failed: " + (e && e.message ? e.message : e));
+      }
+    })();
+  </script>
+</body>
+</html>`
+
+        const w = window.open("", "_blank", "noopener,noreferrer")
+        if (!w) {
+          alert("הדפדפן חסם חלון קופץ. אפשר Popups ואז נסה שוב.")
+          return
+        }
+        w.document.open()
+        w.document.write(html)
+        w.document.close()
+      }
+
+      // -------- DOCX: full text + headings + TOC field
+      function contentToDocxBlocks() {
         const root = document.getElementById("content")
         if (!root) return []
 
         const blocks = []
-        const els = root.querySelectorAll("h1,h2,h3,h4,p,li,blockquote")
-        if (els.length) {
-          els.forEach((el) => {
-            const tag = el.tagName.toLowerCase()
-            const text = (el.textContent || "").replace(/\s+/g, " ").trim()
-            if (!text) return
-            blocks.push({ tag, text })
-          })
-          return blocks
+        let textBuf = ""
+
+        const pushPara = (t) => {
+          const s = String(t || "").replace(/\s+/g, " ").trim()
+          if (s) blocks.push({ kind: "p", text: s })
         }
 
-        const text = (root.textContent || "").split("\n")
-        text.forEach((line) => {
-          const t = String(line || "").trim()
-          if (t) blocks.push({ tag: "p", text: t })
-        })
+        const flushTextBuf = () => {
+          if (!textBuf) return
+          const parts = textBuf.split(/\n+/g)
+          parts.forEach(pushPara)
+          textBuf = ""
+        }
+
+        const isBlockTag = (tag) => {
+          return ["H1","H2","H3","H4","P","LI","BLOCKQUOTE","DIV"].includes(tag)
+        }
+
+        const walk = (node) => {
+          if (!node) return
+
+          if (node.nodeType === Node.TEXT_NODE) {
+            const t = String(node.nodeValue || "")
+            if (t.trim()) textBuf += (textBuf ? "\n" : "") + t
+            return
+          }
+
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const tag = node.tagName
+
+            if (tag === "BR") {
+              textBuf += "\n"
+              return
+            }
+
+            if (isBlockTag(tag)) {
+              flushTextBuf()
+
+              const txt = (node.textContent || "").replace(/\s+/g, " ").trim()
+              if (txt) {
+                if (tag === "H1") blocks.push({ kind: "h1", text: txt })
+                else if (tag === "H2") blocks.push({ kind: "h2", text: txt })
+                else if (tag === "H3") blocks.push({ kind: "h3", text: txt })
+                else if (tag === "H4") blocks.push({ kind: "h4", text: txt })
+                else blocks.push({ kind: "p", text: txt })
+              }
+              return
+            }
+
+            for (const ch of Array.from(node.childNodes)) walk(ch)
+          }
+        }
+
+        for (const n of Array.from(root.childNodes)) walk(n)
+        flushTextBuf()
+
         return blocks
       }
 
       function docxParaXml(text, kind) {
-        // kind: "h1","h2","h3","h4","p"
-        const sizeMap = {
-          h1: 48, // 24pt
-          h2: 40, // 20pt
-          h3: 34, // 17pt
-          h4: 30, // 15pt
-          p: 26   // 13pt
+        const styleMap = {
+          h1: "Heading1",
+          h2: "Heading2",
+          h3: "Heading3",
+          h4: "Heading4",
+          p:  "Normal"
         }
+
+        const sizeMap = {
+          h1: 48,
+          h2: 40,
+          h3: 34,
+          h4: 30,
+          p:  26
+        }
+
+        const pStyle = styleMap[kind] || "Normal"
         const sz = sizeMap[kind] || sizeMap.p
 
-        // bidi + align right
         const pPr =
           "<w:pPr>" +
+            "<w:pStyle w:val=\"" + pStyle + "\"/>" +
             "<w:jc w:val=\"right\"/>" +
             "<w:bidi/>" +
-            (kind !== "p" ? "<w:spacing w:before=\"240\" w:after=\"120\"/>" : "<w:spacing w:after=\"120\"/>") +
+            "<w:spacing w:after=\"120\"/>" +
           "</w:pPr>"
 
         const rPr =
@@ -577,23 +791,122 @@
         )
       }
 
+      function docxTocFieldXml() {
+        return (
+          "<w:p>" +
+            "<w:pPr><w:jc w:val=\"right\"/><w:bidi/></w:pPr>" +
+            "<w:fldSimple w:instr=\"TOC \\o &quot;1-4&quot; \\h \\z \\u\">" +
+              "<w:r><w:rPr><w:rtl/></w:rPr><w:t> </w:t></w:r>" +
+            "</w:fldSimple>" +
+          "</w:p>"
+        )
+      }
+
+      function docxPageBreakXml() {
+        return "<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>"
+      }
+
+      function docxStylesXml() {
+        return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+    <w:qFormat/>
+    <w:rPr><w:rtl/></w:rPr>
+    <w:pPr><w:jc w:val="right"/><w:bidi/></w:pPr>
+  </w:style>
+
+  <w:style w:type="paragraph" w:styleId="Heading1">
+    <w:name w:val="heading 1"/>
+    <w:basedOn w:val="Normal"/>
+    <w:uiPriority w:val="9"/>
+    <w:qFormat/>
+    <w:pPr>
+      <w:outlineLvl w:val="0"/>
+      <w:jc w:val="right"/><w:bidi/>
+      <w:spacing w:before="240" w:after="120"/>
+    </w:pPr>
+    <w:rPr><w:b/><w:rtl/></w:rPr>
+  </w:style>
+
+  <w:style w:type="paragraph" w:styleId="Heading2">
+    <w:name w:val="heading 2"/>
+    <w:basedOn w:val="Normal"/>
+    <w:uiPriority w:val="9"/>
+    <w:qFormat/>
+    <w:pPr>
+      <w:outlineLvl w:val="1"/>
+      <w:jc w:val="right"/><w:bidi/>
+      <w:spacing w:before="200" w:after="100"/>
+    </w:pPr>
+    <w:rPr><w:b/><w:rtl/></w:rPr>
+  </w:style>
+
+  <w:style w:type="paragraph" w:styleId="Heading3">
+    <w:name w:val="heading 3"/>
+    <w:basedOn w:val="Normal"/>
+    <w:uiPriority w:val="9"/>
+    <w:qFormat/>
+    <w:pPr>
+      <w:outlineLvl w:val="2"/>
+      <w:jc w:val="right"/><w:bidi/>
+      <w:spacing w:before="160" w:after="90"/>
+    </w:pPr>
+    <w:rPr><w:b/><w:rtl/></w:rPr>
+  </w:style>
+
+  <w:style w:type="paragraph" w:styleId="Heading4">
+    <w:name w:val="heading 4"/>
+    <w:basedOn w:val="Normal"/>
+    <w:uiPriority w:val="9"/>
+    <w:qFormat/>
+    <w:pPr>
+      <w:outlineLvl w:val="3"/>
+      <w:jc w:val="right"/><w:bidi/>
+      <w:spacing w:before="140" w:after="80"/>
+    </w:pPr>
+    <w:rPr><w:b/><w:rtl/></w:rPr>
+  </w:style>
+</w:styles>`
+      }
+
+      function docxSettingsXml() {
+        return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:updateFields w:val="true"/>
+</w:settings>`
+      }
+
+      function docxDocumentRelsXml() {
+        return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
+</Relationships>`
+      }
+
       async function exportDocx() {
         if (!requireJSZip()) return
 
         const title = getTitleFromContent()
         const outName = fileStem(baseNameFromPath(currentPath)) + ".docx"
 
-        const blocks = htmlToDocxBlocks()
-        const bodyXml = blocks.map((b) => {
-          const kind = (b.tag === "h1" || b.tag === "h2" || b.tag === "h3" || b.tag === "h4") ? b.tag : "p"
-          return docxParaXml(b.text, kind)
-        }).join("")
+        const blocks = contentToDocxBlocks()
+
+        const bodyParts = []
+        bodyParts.push(docxParaXml("תוכן עניינים", "h1"))
+        bodyParts.push(docxTocFieldXml())
+        bodyParts.push(docxPageBreakXml())
+
+        blocks.forEach((b) => {
+          bodyParts.push(docxParaXml(b.text, b.kind))
+        })
 
         const documentXml =
 `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
-    ${bodyXml}
+    ${bodyParts.join("")}
     <w:sectPr/>
   </w:body>
 </w:document>`
@@ -604,6 +917,8 @@
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
   <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
   <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
 </Types>`
@@ -639,7 +954,13 @@
         const zip = new JSZip()
         zip.file("[Content_Types].xml", contentTypesXml)
         zip.folder("_rels").file(".rels", relsXml)
-        zip.folder("word").file("document.xml", documentXml)
+
+        const word = zip.folder("word")
+        word.file("document.xml", documentXml)
+        word.file("styles.xml", docxStylesXml())
+        word.file("settings.xml", docxSettingsXml())
+        word.folder("_rels").file("document.xml.rels", docxDocumentRelsXml())
+
         zip.folder("docProps").file("core.xml", coreXml)
         zip.folder("docProps").file("app.xml", appXml)
 
@@ -651,6 +972,7 @@
         downloadBlob(blob, outName)
       }
 
+      // -------- EPUB: hierarchical nav.xhtml (nested <ol>)
       function ensureHeadingIds(html) {
         const doc = new DOMParser().parseFromString(html, "text/html")
         const headings = doc.querySelectorAll("h1,h2,h3,h4")
@@ -658,6 +980,39 @@
           if (!h.id) h.id = "h-" + i
         })
         return { doc, headings }
+      }
+
+      function collectHeadingItemsFromDoc(doc) {
+        const hs = Array.from(doc.querySelectorAll("h1,h2,h3,h4"))
+        return hs.map((h) => {
+          const level = Number(String(h.tagName).slice(1))
+          const id = h.id || ""
+          const text = (h.textContent || "").trim() || "כותרת"
+          return { level: Math.max(1, Math.min(4, level)), id, text }
+        }).filter(x => x.id && x.text)
+      }
+
+      function buildNestedOl(items) {
+        let html = "<ol>"
+        let cur = 1
+        let first = true
+
+        for (const it of items) {
+          const lvl = it.level
+
+          if (!first) {
+            if (lvl === cur) html += "</li>"
+            while (lvl < cur) { html += "</li></ol>"; cur-- }
+            while (lvl > cur) { html += "<ol>"; cur++ }
+          }
+
+          html += "<li><a href=\"content.xhtml#" + xmlEscape(it.id) + "\">" + xmlEscape(it.text) + "</a>"
+          first = false
+        }
+
+        while (cur > 1) { html += "</li></ol>"; cur-- }
+        html += (first ? "" : "</li>") + "</ol>"
+        return html
       }
 
       async function exportEpub() {
@@ -668,7 +1023,6 @@
 
         let html = currentSafeHtml
         if (!html) {
-          // fallback: אם זה טקסט "pre"
           const escaped = xmlEscape(currentPlainText || "")
           html = "<h1>" + xmlEscape(title) + "</h1><pre>" + escaped + "</pre>"
         }
@@ -690,12 +1044,8 @@
   </body>
 </html>`
 
-        const tocItems = Array.from(headings).slice(0, 800).map((h) => {
-          const lvl = Number(String(h.tagName).slice(1))
-          const txt = (h.textContent || "").trim() || "כותרת"
-          const indent = (Math.max(1, lvl) - 1) * 12
-          return `<li style="margin-right:${indent}px"><a href="content.xhtml#${xmlEscape(h.id)}">${xmlEscape(txt)}</a></li>`
-        }).join("")
+        const headingItems = collectHeadingItemsFromDoc(doc)
+        const tocOl = buildNestedOl(headingItems)
 
         const navXhtml =
 `<?xml version="1.0" encoding="utf-8"?>
@@ -708,9 +1058,7 @@
   <body>
     <nav epub:type="toc" id="toc" role="doc-toc" xmlns:epub="http://www.idpf.org/2007/ops">
       <h1>תוכן עניינים</h1>
-      <ol>
-        ${tocItems}
-      </ol>
+      ${tocOl}
     </nav>
   </body>
 </html>`
@@ -780,7 +1128,7 @@ pre{ white-space: pre-wrap; }`
 
         btnPdf.style.display = "inline-block"
         btnPdf.textContent = "ייצוא PDF"
-        btnPdf.onclick = () => exportPdfPrint()
+        btnPdf.onclick = () => exportPdfPaged()
 
         btnDocx.style.display = "inline-block"
         btnDocx.onclick = () => exportDocx()
