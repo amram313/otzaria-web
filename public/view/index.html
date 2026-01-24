@@ -10,7 +10,6 @@
         --lh: 1.8;
         --readerMax: 980px;
         --pad: 18px;
-
         --drawerW: 340px;
       }
 
@@ -205,10 +204,8 @@
         padding: 6px 10px;
       }
 
-      /* --- PDF print TOC injected into page --- */
-      .printToc {
-        display: none;
-      }
+      /* Printed TOC for PDF */
+      .printToc { display: none; }
       @media print {
         .topbar, .overlay, .drawer { display: none !important; }
         body { background: #fff !important; }
@@ -218,7 +215,7 @@
         .printToc h1 { margin: 0 0 12px 0; }
         .printToc ol { margin: 0; padding: 0 18px 0 0; }
         .printToc li { margin: 0 0 6px 0; }
-        .printToc a { color: #000; text-decoration: none; }
+        .printToc a { color: #000; text-decoration: underline; }
         .printBreak { page-break-after: always; }
       }
     </style>
@@ -525,37 +522,40 @@
         return t || "ספר"
       }
 
-      // -----------------------------
-      // PDF: inject TOC page to print
-      // -----------------------------
+      // ---------- PDF (print) ----------
+      // NOTE: internal # links often do NOT become clickable in Print-to-PDF.
+      // We generate external links to your viewer: /view?path=...#id (these are usually clickable).
       function exportPdfWithPrintedToc() {
         const card = document.getElementById("card")
         const old = document.getElementById("printToc")
         if (old) old.remove()
 
         const items = Array.isArray(currentTocItems) ? currentTocItems : []
-
         const toc = document.createElement("div")
         toc.id = "printToc"
         toc.className = "printToc"
 
-        let list = ""
+        const base = location.origin + "/view?path=" + encodeURIComponent(currentPath)
+
+        let html = "<h1>תוכן עניינים</h1>"
         if (items.length) {
-          list += "<h1>תוכן עניינים</h1><ol>"
+          html += "<ol>"
           items.forEach((it) => {
             const indent = (Math.max(1, it.level) - 1) * 14
-            list += (
+            const url = base + "#" + encodeURIComponent(it.id)
+            html += (
               "<li style=\"margin-right:" + indent + "px\">" +
-                "<a href=\"#" + it.id + "\">" + xmlEscape(it.label) + "</a>" +
+                "<a href=\"" + url + "\">" + xmlEscape(it.label) + "</a>" +
               "</li>"
             )
           })
-          list += "</ol><div class=\"printBreak\"></div>"
+          html += "</ol>"
         } else {
-          list = "<h1>תוכן עניינים</h1><div style=\"color:#666\">(אין כותרות)</div><div class=\"printBreak\"></div>"
+          html += "<div style=\"color:#666\">(אין כותרות)</div>"
         }
+        html += "<div class=\"printBreak\"></div>"
 
-        toc.innerHTML = list
+        toc.innerHTML = html
         card.insertBefore(toc, card.firstChild)
 
         const cleanup = () => {
@@ -568,10 +568,143 @@
         window.print()
       }
 
-      // -----------------------------
-      // DOCX: better RTL + compact TOC
-      // (Bookmark + Hyperlink) + Heading styles
-      // -----------------------------
+      // ---------- DOCX ----------
+      // Adds word/settings.xml + uses one-line TOC (hyperlinks separated by " | ")
+      function docxXmlEscape(s){
+        return xmlEscape(s)
+      }
+
+      function docxContentTypesXml() {
+        return (
+`<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`
+        )
+      }
+
+      function docxRootRelsXml() {
+        return (
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`
+        )
+      }
+
+      function docxDocumentRelsXml() {
+        return (
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rIdSettings" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
+</Relationships>`
+        )
+      }
+
+      function docxSettingsXml() {
+        // This is the piece that usually fixes "Word still LTR"
+        return (
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:mirrorMargins/>
+  <w:rtlGutter/>
+  <w:themeFontLang w:val="en-US" w:bidi="he-IL"/>
+  <w:bidi/>
+</w:settings>`
+        )
+      }
+
+      function docxStylesXml() {
+        return (
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr><w:jc w:val="right"/><w:bidi/></w:pPr>
+    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/></w:rPr>
+  </w:style>
+
+  <w:style w:type="paragraph" w:styleId="Heading1">
+    <w:name w:val="heading 1"/>
+    <w:basedOn w:val="Normal"/>
+    <w:next w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="240" w:after="80"/></w:pPr>
+    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="48"/><w:szCs w:val="48"/></w:rPr>
+  </w:style>
+
+  <w:style w:type="paragraph" w:styleId="Heading2">
+    <w:name w:val="heading 2"/>
+    <w:basedOn w:val="Normal"/>
+    <w:next w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="200" w:after="70"/></w:pPr>
+    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="40"/><w:szCs w:val="40"/></w:rPr>
+  </w:style>
+
+  <w:style w:type="paragraph" w:styleId="Heading3">
+    <w:name w:val="heading 3"/>
+    <w:basedOn w:val="Normal"/>
+    <w:next w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="180" w:after="60"/></w:pPr>
+    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="34"/><w:szCs w:val="34"/></w:rPr>
+  </w:style>
+
+  <w:style w:type="paragraph" w:styleId="Heading4">
+    <w:name w:val="heading 4"/>
+    <w:basedOn w:val="Normal"/>
+    <w:next w:val="Normal"/>
+    <w:qFormat/>
+    <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="160" w:after="50"/></w:pPr>
+    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="30"/><w:szCs w:val="30"/></w:rPr>
+  </w:style>
+
+  <w:style w:type="character" w:styleId="Hyperlink">
+    <w:name w:val="Hyperlink"/>
+    <w:uiPriority w:val="99"/>
+    <w:unhideWhenUsed/>
+    <w:rPr><w:color w:val="0000FF"/><w:u w:val="single"/><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/></w:rPr>
+  </w:style>
+</w:styles>`
+        )
+      }
+
+      function docxCoreXml(title) {
+        const nowIso = new Date().toISOString()
+        return (
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+  xmlns:dc="http://purl.org/dc/elements/1.1/"
+  xmlns:dcterms="http://purl.org/dc/terms/"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>${docxXmlEscape(title)}</dc:title>
+  <dc:language>he-IL</dc:language>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${nowIso}</dcterms:created>
+</cp:coreProperties>`
+        )
+      }
+
+      function docxAppXml() {
+        return (
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
+  xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>otzaria-web</Application>
+</Properties>`
+        )
+      }
+
       function normalizeSpacesKeepNewlines(s) {
         const x = String(s || "").replace(/\r\n/g, "\n")
         return x
@@ -583,12 +716,11 @@
         const t = normalizeSpacesKeepNewlines(text)
         const parts = t.split(/\n\s*\n+/g)
         return parts
-          .map(p => p.replace(/\n+/g, " ").trim())   // IMPORTANT: no raw \n inside docx text
+          .map(p => p.replace(/\n+/g, " ").trim())
           .filter(p => p.length > 0)
       }
 
       function textFromNode(node) {
-        // Extract text incl. <br> as spaces
         let out = ""
         function walk(n) {
           if (!n) return
@@ -598,10 +730,7 @@
           }
           if (n.nodeType === Node.ELEMENT_NODE) {
             const tag = (n.tagName || "").toUpperCase()
-            if (tag === "BR") {
-              out += " "
-              return
-            }
+            if (tag === "BR") { out += " "; return }
             if (tag === "SCRIPT" || tag === "STYLE") return
             for (const c of Array.from(n.childNodes || [])) walk(c)
           }
@@ -653,7 +782,6 @@
           }
 
           for (const c of Array.from(node.childNodes || [])) walk(c)
-
           if (tag === "DIV" || tag === "SECTION" || tag === "ARTICLE") buffer += "\n\n"
         }
 
@@ -662,188 +790,84 @@
         return blocks
       }
 
-      function docxRunXml(text, opts) {
+      function docxRun(text, opts) {
         const o = opts || {}
         const rtl = "<w:rtl/>"
-        const lang = "<w:lang w:val=\"he-IL\"/>"
+        const lang = "<w:lang w:val=\"he-IL\" w:bidi=\"he-IL\"/>"
         const b = o.bold ? "<w:b/>" : ""
         const rStyle = o.rStyle ? "<w:rStyle w:val=\"" + o.rStyle + "\"/>" : ""
         return (
-          "<w:r>" +
-            "<w:rPr>" + rtl + lang + b + rStyle + "</w:rPr>" +
-            "<w:t xml:space=\"preserve\">" + xmlEscape(text) + "</w:t>" +
-          "</w:r>"
+          "<w:r><w:rPr>" + rtl + lang + b + rStyle + "</w:rPr>" +
+          "<w:t xml:space=\"preserve\">" + docxXmlEscape(text) + "</w:t></w:r>"
         )
       }
 
-      function docxPPr(pStyle, spacingAfterTwips, indentRightTwips) {
+      function docxPPr(pStyle, spacingAfterTwips) {
         const jc = "<w:jc w:val=\"right\"/>"
         const bidi = "<w:bidi/>"
         const style = pStyle ? "<w:pStyle w:val=\"" + pStyle + "\"/>" : ""
-        const spacing = "<w:spacing w:after=\"" + String(spacingAfterTwips ?? 0) + "\"/>"
-        const ind = indentRightTwips ? "<w:ind w:right=\"" + String(indentRightTwips) + "\"/>" : ""
-        return "<w:pPr>" + style + jc + bidi + ind + spacing + "</w:pPr>"
+        const spacing = "<w:spacing w:after=\"" + String(spacingAfterTwips ?? 80) + "\"/>"
+        return "<w:pPr>" + style + jc + bidi + spacing + "</w:pPr>"
       }
 
-      function docxParaXml(pStyle, text, spacingAfterTwips, indentRightTwips, bold) {
-        return (
-          "<w:p>" +
-            docxPPr(pStyle, spacingAfterTwips, indentRightTwips) +
-            docxRunXml(text, { bold: !!bold }) +
-          "</w:p>"
-        )
+      function docxPara(pStyle, text, bold) {
+        return "<w:p>" + docxPPr(pStyle, 80) + docxRun(text, { bold: !!bold }) + "</w:p>"
       }
 
       function docxBookmarkStart(id, name) {
-        return "<w:bookmarkStart w:id=\"" + id + "\" w:name=\"" + xmlEscape(name) + "\"/>"
+        return "<w:bookmarkStart w:id=\"" + id + "\" w:name=\"" + docxXmlEscape(name) + "\"/>"
       }
 
       function docxBookmarkEnd(id) {
         return "<w:bookmarkEnd w:id=\"" + id + "\"/>"
       }
 
-      function docxHyperlinkAnchor(anchorName, label) {
-        return (
-          "<w:hyperlink w:anchor=\"" + xmlEscape(anchorName) + "\" w:history=\"1\">" +
-            docxRunXml(label, { rStyle: "Hyperlink" }) +
-          "</w:hyperlink>"
-        )
-      }
-
       function docxHeadingWithBookmark(level, text, bmId, bmName) {
         const lvl = clamp(Number(level || 1), 1, 4)
         const style = "Heading" + lvl
-        // minimal spacing after headings
-        const pPr = docxPPr(style, 80, 0)
         return (
           "<w:p>" +
-            pPr +
+            docxPPr(style, 80) +
             docxBookmarkStart(bmId, bmName) +
-            docxRunXml(text, { bold: true }) +
+            docxRun(text, { bold: true }) +
             docxBookmarkEnd(bmId) +
           "</w:p>"
         )
       }
 
-      function docxContentTypesXml() {
+      function docxHyperlinkAnchor(anchorName, label) {
         return (
-`<?xml version="1.0" encoding="UTF-8"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
-  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
-  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
-</Types>`
+          "<w:hyperlink w:anchor=\"" + docxXmlEscape(anchorName) + "\" w:history=\"1\">" +
+            docxRun(label, { rStyle: "Hyperlink" }) +
+          "</w:hyperlink>"
         )
       }
 
-      function docxRootRelsXml() {
-        return (
-`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
-  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
-</Relationships>`
-        )
-      }
-
-      function docxDocumentRelsXml() {
-        return (
-`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-</Relationships>`
-        )
-      }
-
-      function docxStylesXml() {
-        // NOTE: Hyperlink style + RTL defaults
-        return (
-`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
-    <w:name w:val="Normal"/>
-    <w:qFormat/>
-    <w:pPr><w:jc w:val="right"/><w:bidi/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL"/></w:rPr>
-  </w:style>
-
-  <w:style w:type="paragraph" w:styleId="Heading1">
-    <w:name w:val="heading 1"/>
-    <w:basedOn w:val="Normal"/>
-    <w:next w:val="Normal"/>
-    <w:qFormat/>
-    <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="240" w:after="80"/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL"/><w:b/><w:sz w:val="48"/><w:szCs w:val="48"/></w:rPr>
-  </w:style>
-
-  <w:style w:type="paragraph" w:styleId="Heading2">
-    <w:name w:val="heading 2"/>
-    <w:basedOn w:val="Normal"/>
-    <w:next w:val="Normal"/>
-    <w:qFormat/>
-    <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="200" w:after="70"/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL"/><w:b/><w:sz w:val="40"/><w:szCs w:val="40"/></w:rPr>
-  </w:style>
-
-  <w:style w:type="paragraph" w:styleId="Heading3">
-    <w:name w:val="heading 3"/>
-    <w:basedOn w:val="Normal"/>
-    <w:next w:val="Normal"/>
-    <w:qFormat/>
-    <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="180" w:after="60"/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL"/><w:b/><w:sz w:val="34"/><w:szCs w:val="34"/></w:rPr>
-  </w:style>
-
-  <w:style w:type="paragraph" w:styleId="Heading4">
-    <w:name w:val="heading 4"/>
-    <w:basedOn w:val="Normal"/>
-    <w:next w:val="Normal"/>
-    <w:qFormat/>
-    <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="160" w:after="50"/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL"/><w:b/><w:sz w:val="30"/><w:szCs w:val="30"/></w:rPr>
-  </w:style>
-
-  <w:style w:type="character" w:styleId="Hyperlink">
-    <w:name w:val="Hyperlink"/>
-    <w:uiPriority w:val="99"/>
-    <w:unhideWhenUsed/>
-    <w:rPr><w:color w:val="0000FF"/><w:u w:val="single"/><w:rtl/><w:lang w:val="he-IL"/></w:rPr>
-  </w:style>
-</w:styles>`
-        )
-      }
-
-      function docxCoreXml(title) {
-        const nowIso = new Date().toISOString()
-        return (
-`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
-  xmlns:dc="http://purl.org/dc/elements/1.1/"
-  xmlns:dcterms="http://purl.org/dc/terms/"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>${xmlEscape(title)}</dc:title>
-  <dc:language>he-IL</dc:language>
-  <dcterms:created xsi:type="dcterms:W3CDTF">${nowIso}</dcterms:created>
-</cp:coreProperties>`
-        )
-      }
-
-      function docxAppXml() {
-        return (
-`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
-  xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>otzaria-web</Application>
-</Properties>`
-        )
-      }
-
-      function docxPageBreakXml() {
+      function docxPageBreak() {
         return "<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>"
+      }
+
+      function docxSectPr() {
+        // rtlGutter inside section
+        return "<w:sectPr><w:rtlGutter/></w:sectPr>"
+      }
+
+      function docxOneLineTocParagraph(tocEntries) {
+        // One paragraph with many hyperlinks separated by " | "
+        // It will wrap naturally in Word if too long.
+        let p = "<w:p>" + docxPPr("Normal", 80)
+
+        p += docxRun("תוכן עניינים: ", { bold: true })
+
+        for (let i = 0; i < tocEntries.length; i++) {
+          const e = tocEntries[i]
+          const prefix = e.level > 1 ? ("»".repeat(Math.min(4, e.level - 1)) + " ") : ""
+          p += docxHyperlinkAnchor(e.bmName, prefix + e.label)
+          if (i !== tocEntries.length - 1) p += docxRun(" | ", {})
+        }
+
+        p += "</w:p>"
+        return p
       }
 
       async function exportDocxFull() {
@@ -864,9 +888,9 @@
         }
 
         let bmId = 1
-        const tocEntries = [] // {label, level, bmName, bmId}
-
+        const tocEntries = []
         let bodyContent = ""
+
         blocks.forEach((b) => {
           if (b.type === "h") {
             const lvl = clamp(Number(b.level || 1), 1, 4)
@@ -875,48 +899,33 @@
             bodyContent += docxHeadingWithBookmark(lvl, b.text, bmId, bmName)
             bmId++
           } else {
-            // normal paragraph: small after spacing
-            bodyContent += docxParaXml("Normal", b.text, 80, 0, false)
+            bodyContent += docxPara("Normal", b.text, false)
           }
         })
 
-        // Compact TOC: no big blank lines
-        let tocXml = ""
-        tocXml += docxParaXml("Heading1", "תוכן עניינים", 80, 0, true)
-
-        if (tocEntries.length) {
-          tocEntries.forEach((e) => {
-            const indentRight = (Math.max(1, e.level) - 1) * 360
-            const pPr = docxPPr("Normal", 0, indentRight)  // spacing after 0
-            tocXml += (
-              "<w:p>" +
-                pPr +
-                docxHyperlinkAnchor(e.bmName, e.label) +
-              "</w:p>"
-            )
-          })
-        } else {
-          tocXml += docxParaXml("Normal", "(אין כותרות)", 0, 0, false)
-        }
-
-        tocXml += docxPageBreakXml()
+        const tocPara = tocEntries.length
+          ? docxOneLineTocParagraph(tocEntries)
+          : docxPara("Normal", "תוכן עניינים: (אין כותרות)", true)
 
         const documentXml =
 `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
-    ${tocXml}
+    ${docxPara("Heading1", title, true)}
+    ${tocPara}
+    ${docxPageBreak()}
     ${bodyContent}
-    <w:sectPr/>
+    ${docxSectPr()}
   </w:body>
 </w:document>`
 
         const zip = new JSZip()
         zip.file("[Content_Types].xml", docxContentTypesXml())
-        zip.folder("_rels").file(".rels", docxRootRelsXml())
 
+        zip.folder("_rels").file(".rels", docxRootRelsXml())
         zip.folder("word").file("document.xml", documentXml)
         zip.folder("word").file("styles.xml", docxStylesXml())
+        zip.folder("word").file("settings.xml", docxSettingsXml())
         zip.folder("word").folder("_rels").file("document.xml.rels", docxDocumentRelsXml())
 
         zip.folder("docProps").file("core.xml", docxCoreXml(title))
@@ -930,34 +939,72 @@
         downloadBlob(blob, outName)
       }
 
-      // -----------------------------
-      // EPUB: Aquile-friendly anchors
-      //   - Force ASCII ids
-      //   - Insert <a id="sec-X"></a> before headings
-      //   - nav.xhtml links to those anchors
-      // -----------------------------
-      function epubPrepareDocument(html) {
-        const doc = new DOMParser().parseFromString(String(html || ""), "text/html")
-        const headings = Array.from(doc.querySelectorAll("h1,h2,h3,h4"))
-        const map = [] // {lvl, id, text}
+      // ---------- EPUB (Aquile) ----------
+      // Split by H2 into multiple xhtml files => TOC navigation works reliably.
+      function epubParse(html) {
+        return new DOMParser().parseFromString(
+          "<!doctype html><html><body>" + String(html || "") + "</body></html>",
+          "text/html"
+        )
+      }
 
-        headings.forEach((h, i) => {
+      function xhtmlFixVoidTags(s) {
+        // very small fix for XHTML-ish output
+        return String(s)
+          .replace(/<br>/gi, "<br />")
+          .replace(/<hr>/gi, "<hr />")
+      }
+
+      function epubSplitSections(doc) {
+        const body = doc.body
+        const nodes = Array.from(body.childNodes)
+
+        // choose split tag: H2 if exists, else H1
+        const hasH2 = Array.from(body.querySelectorAll("h2")).length > 0
+        const splitTag = hasH2 ? "H2" : "H1"
+
+        const sections = []
+        let cur = []
+
+        function pushSection() {
+          if (cur.length) sections.push(cur)
+          cur = []
+        }
+
+        nodes.forEach((n) => {
+          if (n.nodeType === Node.ELEMENT_NODE && String(n.tagName).toUpperCase() === splitTag) {
+            if (cur.length) pushSection()
+            cur.push(n)
+          } else {
+            cur.push(n)
+          }
+        })
+
+        pushSection()
+        return { sections, splitTag }
+      }
+
+      function epubMakeSectionDoc(sectionNodes, globalHeadingCounter) {
+        const d = document.implementation.createHTMLDocument("")
+        const container = d.createElement("div")
+        sectionNodes.forEach((n) => {
+          container.appendChild(d.importNode(n, true))
+        })
+
+        // add explicit anchors sec-N before each heading
+        const headings = Array.from(container.querySelectorAll("h1,h2,h3,h4"))
+        const map = [] // {lvl, file, id, text}
+        headings.forEach((h) => {
           const lvl = clamp(Number(String(h.tagName).slice(1)), 1, 4)
-          const id = "sec-" + i
-
-          // insert explicit anchor before heading (better compatibility)
-          const a = doc.createElement("a")
+          const id = "sec-" + globalHeadingCounter.value++
+          const a = d.createElement("a")
           a.setAttribute("id", id)
-          // keep it empty but valid
           h.parentNode.insertBefore(a, h)
-
-          // also set heading id (does not hurt)
           h.setAttribute("id", id)
-
           map.push({ lvl, id, text: (h.textContent || "").trim() || "כותרת" })
         })
 
-        return { doc, map }
+        return { html: container.innerHTML, map }
       }
 
       function buildTreeFromFlat(items) {
@@ -973,27 +1020,27 @@
         return roots
       }
 
-      function renderNavTree(nodes) {
+      function renderNavTree(nodes, hrefBuilder) {
         if (!nodes || !nodes.length) return "<ol></ol>"
         let out = "<ol>"
         for (const n of nodes) {
-          out += "<li><a href=\"content.xhtml#" + xmlEscape(n.id) + "\">" + xmlEscape(n.text) + "</a>"
-          if (n.children && n.children.length) out += renderNavTree(n.children)
+          out += "<li><a href=\"" + xmlEscape(hrefBuilder(n)) + "\">" + xmlEscape(n.text) + "</a>"
+          if (n.children && n.children.length) out += renderNavTree(n.children, hrefBuilder)
           out += "</li>"
         }
         out += "</ol>"
         return out
       }
 
-      function buildNcx(items, uid, title) {
+      function buildNcx(flatItems, uid, title) {
         let play = 1
-        const navPoints = items.slice(0, 800).map((it) => {
+        const navPoints = flatItems.slice(0, 1200).map((it) => {
           const pid = "navPoint-" + play
           const order = play++
           return (
             "<navPoint id=\"" + pid + "\" playOrder=\"" + order + "\">" +
               "<navLabel><text>" + xmlEscape(it.text) + "</text></navLabel>" +
-              "<content src=\"content.xhtml#" + xmlEscape(it.id) + "\"/>" +
+              "<content src=\"" + xmlEscape(it.href) + "\"/>" +
             "</navPoint>"
           )
         }).join("")
@@ -1028,14 +1075,49 @@
           html = "<h1>" + xmlEscape(title) + "</h1><pre>" + xmlEscape(currentPlainText || "") + "</pre>"
         }
 
-        const prepared = epubPrepareDocument(html)
-        const map = prepared.map
-        const tree = buildTreeFromFlat(map)
-        const navOl = renderNavTree(tree)
+        const doc = epubParse(html)
+        const split = epubSplitSections(doc)
 
-        const xhtmlBody = prepared.doc.body.innerHTML
+        const uid = "uid-" + Math.random().toString(16).slice(2)
+        const zip = new JSZip()
 
-        const xhtml =
+        zip.file("mimetype", "application/epub+zip", { compression: "STORE" })
+        zip.folder("META-INF").file("container.xml",
+`<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`)
+
+        const oebps = zip.folder("OEBPS")
+
+        const css =
+`body{ font-family:sans-serif; direction:rtl; line-height:1.85; font-size:1em; }
+h1{ font-size:1.6em; margin:0 0 .6em 0; }
+h2{ font-size:1.3em; margin:1.2em 0 .5em 0; }
+h3{ font-size:1.15em; margin:1.0em 0 .4em 0; }
+a[id]{ display:block; height:0; width:0; }
+pre{ white-space:pre-wrap; }`
+        oebps.file("style.css", css)
+
+        const globalHeadingCounter = { value: 0 }
+
+        const sectionFiles = []
+        const allHeadingsFlat = [] // [{lvl,text,href}]
+        const allHeadingsForTree = [] // [{lvl,text,href}] for tree nesting too
+
+        for (let i = 0; i < split.sections.length; i++) {
+          const nodes = split.sections[i]
+          const sec = epubMakeSectionDoc(nodes, globalHeadingCounter)
+
+          const filename = "section-" + String(i).padStart(3, "0") + ".xhtml"
+          sectionFiles.push(filename)
+
+          // Create XHTML for section
+          const bodyInner = xhtmlFixVoidTags(sec.html)
+
+          const xhtml =
 `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="he" lang="he" dir="rtl">
@@ -1045,9 +1127,22 @@
     <link rel="stylesheet" type="text/css" href="style.css"/>
   </head>
   <body>
-    ${xhtmlBody}
+    ${bodyInner}
   </body>
 </html>`
+          oebps.file(filename, xhtml)
+
+          // collect headings for TOC
+          sec.map.forEach((h) => {
+            const href = filename + "#" + h.id
+            allHeadingsFlat.push({ lvl: h.lvl, text: h.text, href })
+            allHeadingsForTree.push({ lvl: h.lvl, text: h.text, href })
+          })
+        }
+
+        // Build NAV (nested)
+        const tree = buildTreeFromFlat(allHeadingsForTree)
+        const navOl = renderNavTree(tree, (n) => n.href)
 
         const navXhtml =
 `<?xml version="1.0" encoding="utf-8"?>
@@ -1064,60 +1159,41 @@
     </nav>
   </body>
 </html>`
+        oebps.file("nav.xhtml", navXhtml)
 
-        const css =
-`body{
-  font-family: sans-serif;
-  direction: rtl;
-  line-height: 1.85;
-  font-size: 1em;
-}
-h1{ font-size: 1.6em; margin: 0 0 0.6em 0; }
-h2{ font-size: 1.3em; margin: 1.2em 0 0.5em 0; }
-h3{ font-size: 1.15em; margin: 1.0em 0 0.4em 0; }
-a[id]{ display:block; height:0; width:0; }
-pre{ white-space: pre-wrap; }`
+        const ncx = buildNcx(allHeadingsFlat, uid, title)
+        oebps.file("toc.ncx", ncx)
 
-        const uid = "uid-" + Math.random().toString(16).slice(2)
-        const ncx = buildNcx(map, uid, title)
+        // OPF manifest/spine
+        let manifest = ""
+        manifest += `<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>`
+        manifest += `<item id="css" href="style.css" media-type="text/css"/>`
+        manifest += `<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>`
+        sectionFiles.forEach((f, idx) => {
+          manifest += `<item id="s${idx}" href="${f}" media-type="application/xhtml+xml"/>`
+        })
+
+        let spine = ""
+        sectionFiles.forEach((_, idx) => {
+          spine += `<itemref idref="s${idx}"/>`
+        })
 
         const opf =
 `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0" xml:lang="he">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="BookId">${uid}</dc:identifier>
+    <dc:identifier id="BookId">${xmlEscape(uid)}</dc:identifier>
     <dc:title>${xmlEscape(title)}</dc:title>
     <dc:language>he</dc:language>
   </metadata>
   <manifest>
-    <item id="content" href="content.xhtml" media-type="application/xhtml+xml"/>
-    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
-    <item id="css" href="style.css" media-type="text/css"/>
-    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    ${manifest}
   </manifest>
   <spine toc="ncx">
-    <itemref idref="content"/>
+    ${spine}
   </spine>
 </package>`
-
-        const containerXml =
-`<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>`
-
-        const zip = new JSZip()
-        zip.file("mimetype", "application/epub+zip", { compression: "STORE" })
-        zip.folder("META-INF").file("container.xml", containerXml)
-
-        const oebps = zip.folder("OEBPS")
-        oebps.file("content.xhtml", xhtml)
-        oebps.file("nav.xhtml", navXhtml)
-        oebps.file("style.css", css)
         oebps.file("content.opf", opf)
-        oebps.file("toc.ncx", ncx)
 
         const blob = await zip.generateAsync({
           type: "blob",
@@ -1171,12 +1247,14 @@ pre{ white-space: pre-wrap; }`
           savePrefs(p)
           applyPrefs(p)
         }
+
         document.getElementById("btnPlus").onclick = () => {
           const p = loadPrefs()
           p.fs = clamp(p.fs + 1, 12, 34)
           savePrefs(p)
           applyPrefs(p)
         }
+
         document.getElementById("btnBook").onclick = () => {
           const p = loadPrefs()
           p.book = !p.book
