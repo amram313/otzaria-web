@@ -10,7 +10,6 @@
         --lh: 1.8;
         --readerMax: 980px;
         --pad: 18px;
-
         --drawerW: 340px;
       }
 
@@ -204,9 +203,25 @@
         font-size: 12px;
         padding: 6px 10px;
       }
+
+      /* ---------- PDF print TOC ---------- */
+      .printToc {
+        display: none;
+      }
+
+      @media print {
+        .topbar, .overlay, .drawer { display: none !important; }
+        body { background: #fff !important; }
+        .page { padding: 0 !important; }
+        .card { border: none !important; }
+        .printToc { display: block !important; }
+        .printToc h1 { margin: 0 0 12px 0; }
+        .printToc a { color: #000; text-decoration: none; }
+        .printBreak { page-break-after: always; }
+      }
     </style>
 
-    <!-- חובה עבור EPUB + DOCX (Client-side) -->
+    <!-- חובה ל-DOCX/EPUB בצד דפדפן -->
     <script src="/vendor/jszip.min.js"></script>
   </head>
 
@@ -217,6 +232,7 @@
         <button class="btn" id="btnRaw">פתח מקור (RAW)</button>
         <button class="btn" id="btnToc" style="display:none;">תוכן עניינים</button>
 
+        <!-- Export -->
         <button class="btn" id="btnExportPdf" style="display:none;">ייצוא PDF</button>
         <button class="btn" id="btnExportDocx" style="display:none;">ייצוא DOCX</button>
         <button class="btn" id="btnExportEpub" style="display:none;">ייצוא EPUB</button>
@@ -243,6 +259,7 @@
     <div class="page">
       <div class="reader">
         <div class="card" id="card">
+          <!-- TOC for print will be injected here -->
           <div class="loading" id="loading">טוען…</div>
 
           <div class="content" id="content" style="display:none;"></div>
@@ -274,6 +291,7 @@
       let currentPath = ""
       let currentSafeHtml = ""
       let currentPlainText = ""
+      let currentTocItems = [] // [{id,label,level}]
 
       function encodePath(path){
         return String(path).split("/").filter(Boolean).map(encodeURIComponent).join("/")
@@ -363,13 +381,18 @@
         const nodes = Array.from(content.querySelectorAll("h1, h2, h3, h4"))
           .filter(n => textOf(n))
 
-        if (nodes.length === 0) return { items: [], steps: [] }
+        if (nodes.length === 0) {
+          currentTocItems = []
+          return { items: [], steps: [] }
+        }
 
         const items = nodes.map((n, idx) => {
           const level = Number(String(n.tagName).slice(1))
           if (!n.id) n.id = "h" + level + "-" + idx + "-" + slug(textOf(n))
           return { id: n.id, label: textOf(n), level }
         })
+
+        currentTocItems = items
 
         document.getElementById("btnToc").style.display = "inline-block"
         document.getElementById("btnTop").style.display = "inline-block"
@@ -501,303 +524,204 @@
         return String(name || "book").replace(/\.[a-z0-9]{2,6}$/i, "") || "book"
       }
 
-      function getTitleFromContent() {
+      function getTitleFromDom() {
         const h1 = document.querySelector("#content h1")
         const t = h1 ? (h1.textContent || "").trim() : ""
         return t || "ספר"
       }
 
-      // -------- PDF with page numbers in TOC (Paged.js)
-      function headingItemsForTocFromDom() {
-        const root = document.getElementById("content")
-        if (!root) return []
-        const hs = Array.from(root.querySelectorAll("h1,h2,h3,h4"))
-          .map((h) => {
-            const level = Number(String(h.tagName).slice(1))
-            const id = h.id || ""
-            const text = (h.textContent || "").trim()
-            return { level: Math.max(1, Math.min(4, level)), id, text }
+      // ---------- PDF: create an on-print TOC page + print
+      function exportPdfPrintWithToc() {
+        const card = document.getElementById("card")
+
+        // remove old
+        const old = document.getElementById("printToc")
+        if (old) old.remove()
+
+        const toc = document.createElement("div")
+        toc.id = "printToc"
+        toc.className = "printToc"
+
+        const items = Array.isArray(currentTocItems) ? currentTocItems : []
+        let list = ""
+        if (items.length) {
+          list += "<ol style=\"margin:0; padding:0 18px 0 0;\">"
+          items.forEach((it) => {
+            const indent = (Math.max(1, it.level) - 1) * 14
+            list += (
+              "<li style=\"margin-right:" + indent + "px; margin-bottom:6px;\">" +
+                "<a href=\"#" + it.id + "\">" + xmlEscape(it.label) + "</a>" +
+              "</li>"
+            )
           })
-          .filter(x => x.id && x.text)
-        return hs
+          list += "</ol>"
+        } else {
+          list = "<div style=\"color:#666;\">(אין כותרות ליצירת תוכן עניינים)</div>"
+        }
+
+        toc.innerHTML =
+          "<h1>תוכן עניינים</h1>" +
+          list +
+          "<div class=\"printBreak\"></div>"
+
+        card.insertBefore(toc, card.firstChild)
+
+        const cleanup = () => {
+          const x = document.getElementById("printToc")
+          if (x) x.remove()
+          window.removeEventListener("afterprint", cleanup)
+        }
+        window.addEventListener("afterprint", cleanup)
+
+        window.print()
       }
 
-      function buildNestedOlHtml(items) {
-        // nested <ol> לפי level
-        let html = "<ol>"
-        let cur = 1
-        let first = true
+      // ==========================
+      // DOCX: full text + headings + TOC field
+      // ==========================
 
-        for (const it of items) {
-          const lvl = it.level
+      function normalizeSpacesKeepNewlines(s) {
+        const x = String(s || "").replace(/\r\n/g, "\n")
+        // לא מוחק שורות; מנקה רווחים מיותרים
+        return x
+          .replace(/[ \t]+\n/g, "\n")
+          .replace(/\n[ \t]+/g, "\n")
+      }
 
-          if (!first) {
-            if (lvl === cur) html += "</li>"
-            while (lvl < cur) { html += "</li></ol>"; cur-- }
-            while (lvl > cur) { html += "<ol>"; cur++ }
+      function splitToParagraphs(text) {
+        const t = normalizeSpacesKeepNewlines(text)
+        // פסקאות לפי שורה ריקה
+        const parts = t.split(/\n\s*\n+/g)
+        return parts
+          .map(p => p.replace(/\n+/g, "\n").trim())
+          .filter(p => p.length > 0)
+      }
+
+      function textFromNodeWithBr(node) {
+        let out = ""
+        function walk(n) {
+          if (!n) return
+          if (n.nodeType === Node.TEXT_NODE) {
+            out += n.nodeValue || ""
+            return
           }
-
-          html += "<li><a href=\"#" + xmlEscape(it.id) + "\">" + xmlEscape(it.text) + "</a>"
-          first = false
+          if (n.nodeType === Node.ELEMENT_NODE) {
+            const tag = (n.tagName || "").toUpperCase()
+            if (tag === "BR") {
+              out += "\n"
+              return
+            }
+            // אל תכניס טקסט של script/style
+            if (tag === "SCRIPT" || tag === "STYLE") return
+            for (const c of Array.from(n.childNodes || [])) walk(c)
+          }
         }
-
-        while (cur > 1) { html += "</li></ol>"; cur-- }
-        html += (first ? "" : "</li>") + "</ol>"
-        return html
+        walk(node)
+        return out
       }
 
-      function exportPdfPaged() {
-        const root = document.getElementById("content")
-        const pre = document.getElementById("pre")
-        const title = getTitleFromContent()
-        const items = headingItemsForTocFromDom()
-        const tocOl = buildNestedOlHtml(items)
-
-        // בונים HTML חדש לחלון
-        const bookHtml = root && root.style.display !== "none"
-          ? root.innerHTML
-          : ("<pre>" + xmlEscape(pre ? pre.textContent : "") + "</pre>")
-
-        // Paged.js CDN (מומלץ להעתיק לקובץ מקומי אם תרצה יציבות מלאה):
-        const pagedJsUrl = "https://unpkg.com/pagedjs/dist/paged.polyfill.js"
-
-        const html =
-`<!doctype html>
-<html lang="he" dir="rtl">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>${xmlEscape(title)}</title>
-  <style>
-    body{
-      font-family: system-ui, Arial;
-      margin: 0;
-      padding: 0;
-      direction: rtl;
-    }
-
-    .wrap{
-      padding: 18px 18px 0 18px;
-    }
-
-    .tocTitle{
-      font-size: 22px;
-      font-weight: 700;
-      margin: 0 0 10px 0;
-    }
-
-    .toc{
-      page-break-after: always;
-    }
-
-    .toc ol{
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    .toc li{
-      margin: 0;
-      padding: 0;
-    }
-
-    .toc a{
-      color: #000;
-      text-decoration: none;
-      display: block;
-      padding: 4px 0;
-    }
-
-    /* מספרי עמודים בטבלת תוכן באמצעות Paged.js + target-counter */
-    .toc a::after{
-      content: leader('.') target-counter(attr(href), page);
-      float: left; /* ב-RTL המספרים בצד שמאל */
-    }
-
-    h1{ font-size: 26px; margin: 0 0 10px 0; }
-    h2{ font-size: 21px; margin: 18px 0 8px 0; }
-    h3{ font-size: 18px; margin: 14px 0 6px 0; }
-
-    /* עימוד */
-    @page{
-      size: A4;
-      margin: 18mm 16mm 20mm 16mm;
-
-      @bottom-center{
-        content: counter(page) " / " counter(pages);
-        font-size: 10pt;
-      }
-    }
-
-    /* טקסט רגיל */
-    p{ margin: 10px 0; line-height: 1.8; font-size: 14pt; }
-    .content{ font-size: 14pt; line-height: 1.85; }
-    pre{ white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11pt; line-height: 1.6; }
-  </style>
-
-  <script>
-    // מונע auto כדי שנוכל לקרוא preview ואז print
-    window.PagedConfig = { auto: false };
-  </script>
-  <script src="${pagedJsUrl}"></script>
-</head>
-<body>
-  <div class="wrap">
-    <div class="toc">
-      <div class="tocTitle">תוכן עניינים</div>
-      ${tocOl || "<div>אין כותרות</div>"}
-    </div>
-
-    <div class="content" id="content">
-      ${bookHtml}
-    </div>
-  </div>
-
-  <script>
-    (async () => {
-      try {
-        // מייצר paged preview (מחשב target-counter + leader + counters)
-        await PagedPolyfill.preview();
-
-        // פותח print dialog – המשתמש שומר כ-PDF
-        setTimeout(() => window.print(), 50);
-      } catch (e) {
-        alert("Paged.js failed: " + (e && e.message ? e.message : e));
-      }
-    })();
-  </script>
-</body>
-</html>`
-
-        const w = window.open("", "_blank", "noopener,noreferrer")
-        if (!w) {
-          alert("הדפדפן חסם חלון קופץ. אפשר Popups ואז נסה שוב.")
-          return
-        }
-        w.document.open()
-        w.document.write(html)
-        w.document.close()
-      }
-
-      // -------- DOCX: full text + headings + TOC field
-      function contentToDocxBlocks() {
-        const root = document.getElementById("content")
-        if (!root) return []
-
+      // Collect blocks in visual order, including loose text nodes between headings
+      function collectDocxBlocksFromRoot(root) {
         const blocks = []
-        let textBuf = ""
+        let buffer = ""
 
-        const pushPara = (t) => {
-          const s = String(t || "").replace(/\s+/g, " ").trim()
-          if (s) blocks.push({ kind: "p", text: s })
+        function flushBufferAsParagraphs() {
+          const paras = splitToParagraphs(buffer)
+          paras.forEach((p) => blocks.push({ type: "p", text: p }))
+          buffer = ""
         }
 
-        const flushTextBuf = () => {
-          if (!textBuf) return
-          const parts = textBuf.split(/\n+/g)
-          parts.forEach(pushPara)
-          textBuf = ""
+        function addHeading(level, text) {
+          const t = String(text || "").replace(/\s+/g, " ").trim()
+          if (!t) return
+          blocks.push({ type: "h", level, text: t })
         }
 
-        const isBlockTag = (tag) => {
-          return ["H1","H2","H3","H4","P","LI","BLOCKQUOTE","DIV"].includes(tag)
+        function addParagraph(text) {
+          const paras = splitToParagraphs(text)
+          paras.forEach((p) => blocks.push({ type: "p", text: p }))
         }
 
-        const walk = (node) => {
+        function walk(node) {
           if (!node) return
 
           if (node.nodeType === Node.TEXT_NODE) {
-            const t = String(node.nodeValue || "")
-            if (t.trim()) textBuf += (textBuf ? "\n" : "") + t
+            buffer += node.nodeValue || ""
             return
           }
 
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            const tag = node.tagName
+          if (node.nodeType !== Node.ELEMENT_NODE) return
 
-            if (tag === "BR") {
-              textBuf += "\n"
-              return
-            }
+          const tag = (node.tagName || "").toUpperCase()
 
-            if (isBlockTag(tag)) {
-              flushTextBuf()
+          // Headings: treat as blocks and flush buffer before them
+          if (tag === "H1" || tag === "H2" || tag === "H3" || tag === "H4") {
+            flushBufferAsParagraphs()
+            const lvl = Number(tag.slice(1))
+            addHeading(lvl, node.textContent || "")
+            return
+          }
 
-              const txt = (node.textContent || "").replace(/\s+/g, " ").trim()
-              if (txt) {
-                if (tag === "H1") blocks.push({ kind: "h1", text: txt })
-                else if (tag === "H2") blocks.push({ kind: "h2", text: txt })
-                else if (tag === "H3") blocks.push({ kind: "h3", text: txt })
-                else if (tag === "H4") blocks.push({ kind: "h4", text: txt })
-                else blocks.push({ kind: "p", text: txt })
-              }
-              return
-            }
+          if (tag === "BR") {
+            buffer += "\n"
+            return
+          }
 
-            for (const ch of Array.from(node.childNodes)) walk(ch)
+          // Block-level elements that should become paragraphs
+          if (tag === "P" || tag === "BLOCKQUOTE" || tag === "PRE") {
+            flushBufferAsParagraphs()
+            const txt = textFromNodeWithBr(node)
+            addParagraph(txt)
+            return
+          }
+
+          // Lists: each LI as paragraph with bullet
+          if (tag === "LI") {
+            flushBufferAsParagraphs()
+            const txt = textFromNodeWithBr(node).replace(/\s+/g, " ").trim()
+            if (txt) blocks.push({ type: "p", text: "• " + txt })
+            return
+          }
+
+          // For other containers, walk children to catch loose text
+          for (const c of Array.from(node.childNodes || [])) walk(c)
+
+          // Add a newline boundary after some container types to keep paragraphs separated
+          if (tag === "DIV" || tag === "SECTION" || tag === "ARTICLE") {
+            buffer += "\n\n"
           }
         }
 
-        for (const n of Array.from(root.childNodes)) walk(n)
-        flushTextBuf()
-
+        walk(root)
+        flushBufferAsParagraphs()
         return blocks
       }
 
-      function docxParaXml(text, kind) {
-        const styleMap = {
-          h1: "Heading1",
-          h2: "Heading2",
-          h3: "Heading3",
-          h4: "Heading4",
-          p:  "Normal"
-        }
-
-        const sizeMap = {
-          h1: 48,
-          h2: 40,
-          h3: 34,
-          h4: 30,
-          p:  26
-        }
-
-        const pStyle = styleMap[kind] || "Normal"
-        const sz = sizeMap[kind] || sizeMap.p
-
-        const pPr =
-          "<w:pPr>" +
-            "<w:pStyle w:val=\"" + pStyle + "\"/>" +
-            "<w:jc w:val=\"right\"/>" +
-            "<w:bidi/>" +
-            "<w:spacing w:after=\"120\"/>" +
-          "</w:pPr>"
-
-        const rPr =
-          "<w:rPr>" +
-            "<w:rtl/>" +
-            "<w:sz w:val=\"" + sz + "\"/>" +
-            "<w:szCs w:val=\"" + sz + "\"/>" +
-            (kind !== "p" ? "<w:b/>" : "") +
-          "</w:rPr>"
-
+      function docxRunXml(text, bold, size) {
+        const b = bold ? "<w:b/>" : ""
+        const sz = size ? (
+          "<w:sz w:val=\"" + size + "\"/>" +
+          "<w:szCs w:val=\"" + size + "\"/>"
+        ) : ""
         return (
-          "<w:p>" +
-            pPr +
-            "<w:r>" +
-              rPr +
-              "<w:t xml:space=\"preserve\">" + xmlEscape(text) + "</w:t>" +
-            "</w:r>" +
-          "</w:p>"
+          "<w:r>" +
+            "<w:rPr><w:rtl/>" + b + sz + "</w:rPr>" +
+            "<w:t xml:space=\"preserve\">" + xmlEscape(text) + "</w:t>" +
+          "</w:r>"
         )
       }
 
-      function docxTocFieldXml() {
+      function docxParagraphXml(text, opts) {
+        const o = opts || {}
+        const pStyle = o.pStyle ? "<w:pStyle w:val=\"" + o.pStyle + "\"/>" : ""
+        const jc = "<w:jc w:val=\"right\"/>"
+        const bidi = "<w:bidi/>"
+        const spacing = o.spacing ? o.spacing : "<w:spacing w:after=\"120\"/>"
+
         return (
           "<w:p>" +
-            "<w:pPr><w:jc w:val=\"right\"/><w:bidi/></w:pPr>" +
-            "<w:fldSimple w:instr=\"TOC \\o &quot;1-4&quot; \\h \\z \\u\">" +
-              "<w:r><w:rPr><w:rtl/></w:rPr><w:t> </w:t></w:r>" +
-            "</w:fldSimple>" +
+            "<w:pPr>" + pStyle + jc + bidi + spacing + "</w:pPr>" +
+            docxRunXml(text, !!o.bold, o.size) +
           "</w:p>"
         )
       }
@@ -806,134 +730,104 @@
         return "<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>"
       }
 
+      function docxTocFieldXml() {
+        // Word will usually require "Update field" once to populate
+        return (
+          "<w:p>" +
+            "<w:pPr><w:jc w:val=\"right\"/><w:bidi/></w:pPr>" +
+            "<w:fldSimple w:instr=\"TOC \\\\o &quot;1-4&quot; \\\\h \\\\z \\\\u\"/>" +
+          "</w:p>"
+        )
+      }
+
       function docxStylesXml() {
-        return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        // Minimal styles to ensure Heading1-Heading4 exist + RTL right align
+        return (
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
     <w:name w:val="Normal"/>
     <w:qFormat/>
-    <w:rPr><w:rtl/></w:rPr>
     <w:pPr><w:jc w:val="right"/><w:bidi/></w:pPr>
+    <w:rPr><w:rtl/></w:rPr>
   </w:style>
 
   <w:style w:type="paragraph" w:styleId="Heading1">
     <w:name w:val="heading 1"/>
     <w:basedOn w:val="Normal"/>
-    <w:uiPriority w:val="9"/>
+    <w:next w:val="Normal"/>
     <w:qFormat/>
-    <w:pPr>
-      <w:outlineLvl w:val="0"/>
-      <w:jc w:val="right"/><w:bidi/>
-      <w:spacing w:before="240" w:after="120"/>
-    </w:pPr>
-    <w:rPr><w:b/><w:rtl/></w:rPr>
+    <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="240" w:after="120"/></w:pPr>
+    <w:rPr><w:rtl/><w:b/><w:sz w:val="48"/><w:szCs w:val="48"/></w:rPr>
   </w:style>
 
   <w:style w:type="paragraph" w:styleId="Heading2">
     <w:name w:val="heading 2"/>
     <w:basedOn w:val="Normal"/>
-    <w:uiPriority w:val="9"/>
+    <w:next w:val="Normal"/>
     <w:qFormat/>
-    <w:pPr>
-      <w:outlineLvl w:val="1"/>
-      <w:jc w:val="right"/><w:bidi/>
-      <w:spacing w:before="200" w:after="100"/>
-    </w:pPr>
-    <w:rPr><w:b/><w:rtl/></w:rPr>
+    <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="220" w:after="110"/></w:pPr>
+    <w:rPr><w:rtl/><w:b/><w:sz w:val="40"/><w:szCs w:val="40"/></w:rPr>
   </w:style>
 
   <w:style w:type="paragraph" w:styleId="Heading3">
     <w:name w:val="heading 3"/>
     <w:basedOn w:val="Normal"/>
-    <w:uiPriority w:val="9"/>
+    <w:next w:val="Normal"/>
     <w:qFormat/>
-    <w:pPr>
-      <w:outlineLvl w:val="2"/>
-      <w:jc w:val="right"/><w:bidi/>
-      <w:spacing w:before="160" w:after="90"/>
-    </w:pPr>
-    <w:rPr><w:b/><w:rtl/></w:rPr>
+    <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="200" w:after="100"/></w:pPr>
+    <w:rPr><w:rtl/><w:b/><w:sz w:val="34"/><w:szCs w:val="34"/></w:rPr>
   </w:style>
 
   <w:style w:type="paragraph" w:styleId="Heading4">
     <w:name w:val="heading 4"/>
     <w:basedOn w:val="Normal"/>
-    <w:uiPriority w:val="9"/>
+    <w:next w:val="Normal"/>
     <w:qFormat/>
-    <w:pPr>
-      <w:outlineLvl w:val="3"/>
-      <w:jc w:val="right"/><w:bidi/>
-      <w:spacing w:before="140" w:after="80"/>
-    </w:pPr>
-    <w:rPr><w:b/><w:rtl/></w:rPr>
+    <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="180" w:after="90"/></w:pPr>
+    <w:rPr><w:rtl/><w:b/><w:sz w:val="30"/><w:szCs w:val="30"/></w:rPr>
   </w:style>
 </w:styles>`
-      }
-
-      function docxSettingsXml() {
-        return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:updateFields w:val="true"/>
-</w:settings>`
+        )
       }
 
       function docxDocumentRelsXml() {
-        return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return (
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
+  <Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`
+        )
       }
 
-      async function exportDocx() {
-        if (!requireJSZip()) return
-
-        const title = getTitleFromContent()
-        const outName = fileStem(baseNameFromPath(currentPath)) + ".docx"
-
-        const blocks = contentToDocxBlocks()
-
-        const bodyParts = []
-        bodyParts.push(docxParaXml("תוכן עניינים", "h1"))
-        bodyParts.push(docxTocFieldXml())
-        bodyParts.push(docxPageBreakXml())
-
-        blocks.forEach((b) => {
-          bodyParts.push(docxParaXml(b.text, b.kind))
-        })
-
-        const documentXml =
-`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    ${bodyParts.join("")}
-    <w:sectPr/>
-  </w:body>
-</w:document>`
-
-        const contentTypesXml =
+      function docxContentTypesXml() {
+        return (
 `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
-  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
   <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
   <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
 </Types>`
+        )
+      }
 
-        const relsXml =
+      function docxRootRelsXml() {
+        return (
 `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
   <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
 </Relationships>`
+        )
+      }
 
+      function docxCoreXml(title) {
         const nowIso = new Date().toISOString()
-
-        const coreXml =
+        return (
 `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
   xmlns:dc="http://purl.org/dc/elements/1.1/"
@@ -943,26 +837,73 @@
   <dc:language>he-IL</dc:language>
   <dcterms:created xsi:type="dcterms:W3CDTF">${nowIso}</dcterms:created>
 </cp:coreProperties>`
+        )
+      }
 
-        const appXml =
+      function docxAppXml() {
+        return (
 `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
   xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
   <Application>otzaria-web</Application>
 </Properties>`
+        )
+      }
+
+      async function exportDocxFull() {
+        if (!requireJSZip()) return
+        const title = getTitleFromDom()
+        const outName = fileStem(baseNameFromPath(currentPath)) + ".docx"
+
+        // Collect blocks from current DOM (includes loose text!)
+        const root = document.getElementById("content")
+        let blocks = []
+
+        if (root && root.style.display !== "none") {
+          blocks = collectDocxBlocksFromRoot(root)
+        } else {
+          // fallback: from plain text
+          const paras = splitToParagraphs(currentPlainText || "")
+          blocks = paras.map(p => ({ type: "p", text: p }))
+          if (!blocks.length) blocks = [{ type:"p", text:"(ריק)" }]
+        }
+
+        // Build document XML:
+        // 1) TOC page (heading + field) + page break
+        // 2) Content with heading styles
+        let bodyXml = ""
+        bodyXml += docxParagraphXml("תוכן עניינים", { pStyle: "Heading1", bold: true })
+        bodyXml += docxTocFieldXml()
+        bodyXml += docxPageBreakXml()
+
+        blocks.forEach((b) => {
+          if (b.type === "h") {
+            const lvl = clamp(Number(b.level || 1), 1, 4)
+            bodyXml += docxParagraphXml(b.text, { pStyle: "Heading" + lvl, bold: true })
+          } else {
+            bodyXml += docxParagraphXml(b.text, { pStyle: "Normal", bold: false })
+          }
+        })
+
+        const documentXml =
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    ${bodyXml}
+    <w:sectPr/>
+  </w:body>
+</w:document>`
 
         const zip = new JSZip()
-        zip.file("[Content_Types].xml", contentTypesXml)
-        zip.folder("_rels").file(".rels", relsXml)
+        zip.file("[Content_Types].xml", docxContentTypesXml())
 
-        const word = zip.folder("word")
-        word.file("document.xml", documentXml)
-        word.file("styles.xml", docxStylesXml())
-        word.file("settings.xml", docxSettingsXml())
-        word.folder("_rels").file("document.xml.rels", docxDocumentRelsXml())
+        zip.folder("_rels").file(".rels", docxRootRelsXml())
+        zip.folder("word").file("document.xml", documentXml)
+        zip.folder("word").file("styles.xml", docxStylesXml())
+        zip.folder("word").folder("_rels").file("document.xml.rels", docxDocumentRelsXml())
 
-        zip.folder("docProps").file("core.xml", coreXml)
-        zip.folder("docProps").file("app.xml", appXml)
+        zip.folder("docProps").file("core.xml", docxCoreXml(title))
+        zip.folder("docProps").file("app.xml", docxAppXml())
 
         const blob = await zip.generateAsync({
           type: "blob",
@@ -970,9 +911,14 @@
         })
 
         downloadBlob(blob, outName)
+
+        // רמז למשתמש: TOC דורש עדכון שדה פעם אחת
+        alert("DOCX ירד. בוורד: קליק ימני על תוכן העניינים → Update Field (או Update Table) כדי שימלא.")
       }
 
-      // -------- EPUB: hierarchical nav.xhtml (nested <ol>)
+      // ==========================
+      // EPUB: hierarchical nav.xhtml + toc.ncx
+      // ==========================
       function ensureHeadingIds(html) {
         const doc = new DOMParser().parseFromString(html, "text/html")
         const headings = doc.querySelectorAll("h1,h2,h3,h4")
@@ -982,49 +928,115 @@
         return { doc, headings }
       }
 
-      function collectHeadingItemsFromDoc(doc) {
-        const hs = Array.from(doc.querySelectorAll("h1,h2,h3,h4"))
-        return hs.map((h) => {
-          const level = Number(String(h.tagName).slice(1))
-          const id = h.id || ""
-          const text = (h.textContent || "").trim() || "כותרת"
-          return { level: Math.max(1, Math.min(4, level)), id, text }
-        }).filter(x => x.id && x.text)
-      }
+      function buildEpubNavNested(headings) {
+        // Proper nested <ol> based on heading levels 1..4
+        const items = Array.from(headings).map((h) => {
+          const lvl = clamp(Number(String(h.tagName).slice(1)), 1, 4)
+          const id = String(h.id || "").trim()
+          const txt = (h.textContent || "").trim() || "כותרת"
+          return { lvl, id, txt }
+        }).filter(x => x.id)
 
-      function buildNestedOl(items) {
-        let html = "<ol>"
-        let cur = 1
-        let first = true
+        if (!items.length) return "<ol></ol>"
 
-        for (const it of items) {
-          const lvl = it.level
+        let out = []
+        let level = 0
+        let openLi = false
 
-          if (!first) {
-            if (lvl === cur) html += "</li>"
-            while (lvl < cur) { html += "</li></ol>"; cur-- }
-            while (lvl > cur) { html += "<ol>"; cur++ }
+        function openOl() { out.push("<ol>") }
+        function closeOl() { out.push("</ol>") }
+        function closeLiIfOpen() { if (openLi) { out.push("</li>"); openLi = false } }
+
+        for (let i = 0; i < items.length; i++) {
+          let lvl = items[i].lvl
+          if (lvl < 1) lvl = 1
+
+          // First item: force at least one <ol>
+          if (level === 0) { openOl(); level = 1 }
+
+          // Adjust level
+          while (lvl > level) {
+            // nested list inside current li
+            if (openLi) {
+              out.push("<ol>")
+              openLi = false
+            } else {
+              out.push("<ol>")
+            }
+            level++
           }
 
-          html += "<li><a href=\"content.xhtml#" + xmlEscape(it.id) + "\">" + xmlEscape(it.text) + "</a>"
-          first = false
+          while (lvl < level) {
+            closeLiIfOpen()
+            closeOl()
+            level--
+          }
+
+          closeLiIfOpen()
+          out.push("<li><a href=\"content.xhtml#" + xmlEscape(items[i].id) + "\">" + xmlEscape(items[i].txt) + "</a>")
+          openLi = true
         }
 
-        while (cur > 1) { html += "</li></ol>"; cur-- }
-        html += (first ? "" : "</li>") + "</ol>"
-        return html
+        closeLiIfOpen()
+        while (level > 0) {
+          closeOl()
+          level--
+        }
+
+        return out.join("")
       }
 
-      async function exportEpub() {
+      function buildNcxFromHeadings(headings, uid, title) {
+        // Minimal NCX for better compatibility
+        const items = Array.from(headings).map((h) => {
+          const lvl = clamp(Number(String(h.tagName).slice(1)), 1, 4)
+          const id = String(h.id || "").trim()
+          const txt = (h.textContent || "").trim() || "כותרת"
+          return { lvl, id, txt }
+        }).filter(x => x.id)
+
+        let play = 1
+        const navPoints = items.slice(0, 800).map((it) => {
+          const pid = "navPoint-" + play
+          const indent = it.lvl
+          const order = play++
+          return (
+            "<navPoint id=\"" + pid + "\" playOrder=\"" + order + "\">" +
+              "<navLabel><text>" + xmlEscape(it.txt) + "</text></navLabel>" +
+              "<content src=\"content.xhtml#" + xmlEscape(it.id) + "\"/>" +
+            "</navPoint>"
+          )
+        }).join("")
+
+        return (
+`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN"
+ "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head>
+    <meta name="dtb:uid" content="${xmlEscape(uid)}"/>
+    <meta name="dtb:depth" content="4"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle><text>${xmlEscape(title)}</text></docTitle>
+  <navMap>
+    ${navPoints}
+  </navMap>
+</ncx>`
+        )
+      }
+
+      async function exportEpubFull() {
         if (!requireJSZip()) return
 
-        const title = getTitleFromContent()
+        const title = getTitleFromDom()
         const outName = fileStem(baseNameFromPath(currentPath)) + ".epub"
 
         let html = currentSafeHtml
         if (!html) {
-          const escaped = xmlEscape(currentPlainText || "")
-          html = "<h1>" + xmlEscape(title) + "</h1><pre>" + escaped + "</pre>"
+          // fallback: plain text
+          html = "<h1>" + xmlEscape(title) + "</h1><pre>" + xmlEscape(currentPlainText || "") + "</pre>"
         }
 
         const { doc, headings } = ensureHeadingIds(html)
@@ -1044,8 +1056,7 @@
   </body>
 </html>`
 
-        const headingItems = collectHeadingItemsFromDoc(doc)
-        const tocOl = buildNestedOl(headingItems)
+        const navOl = buildEpubNavNested(headings)
 
         const navXhtml =
 `<?xml version="1.0" encoding="utf-8"?>
@@ -1058,7 +1069,7 @@
   <body>
     <nav epub:type="toc" id="toc" role="doc-toc" xmlns:epub="http://www.idpf.org/2007/ops">
       <h1>תוכן עניינים</h1>
-      ${tocOl}
+      ${navOl}
     </nav>
   </body>
 </html>`
@@ -1089,8 +1100,9 @@ pre{ white-space: pre-wrap; }`
     <item id="content" href="content.xhtml" media-type="application/xhtml+xml"/>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="css" href="style.css" media-type="text/css"/>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
   </manifest>
-  <spine>
+  <spine toc="ncx">
     <itemref idref="content"/>
   </spine>
 </package>`
@@ -1103,6 +1115,8 @@ pre{ white-space: pre-wrap; }`
   </rootfiles>
 </container>`
 
+        const ncx = buildNcxFromHeadings(headings, uid, title)
+
         const zip = new JSZip()
         zip.file("mimetype", "application/epub+zip", { compression: "STORE" })
         zip.folder("META-INF").file("container.xml", containerXml)
@@ -1112,6 +1126,7 @@ pre{ white-space: pre-wrap; }`
         oebps.file("nav.xhtml", navXhtml)
         oebps.file("style.css", css)
         oebps.file("content.opf", opf)
+        oebps.file("toc.ncx", ncx)
 
         const blob = await zip.generateAsync({
           type: "blob",
@@ -1121,20 +1136,25 @@ pre{ white-space: pre-wrap; }`
         downloadBlob(blob, outName)
       }
 
-      function showExportButtonsForHtml() {
+      // ==========================
+      // Export button wiring
+      // ==========================
+      function showExportButtonsForHtmlOrText() {
         const btnPdf = document.getElementById("btnExportPdf")
         const btnDocx = document.getElementById("btnExportDocx")
         const btnEpub = document.getElementById("btnExportEpub")
 
         btnPdf.style.display = "inline-block"
         btnPdf.textContent = "ייצוא PDF"
-        btnPdf.onclick = () => exportPdfPaged()
+        btnPdf.onclick = () => exportPdfPrintWithToc()
 
         btnDocx.style.display = "inline-block"
-        btnDocx.onclick = () => exportDocx()
+        btnDocx.textContent = "ייצוא DOCX"
+        btnDocx.onclick = () => exportDocxFull()
 
         btnEpub.style.display = "inline-block"
-        btnEpub.onclick = () => exportEpub()
+        btnEpub.textContent = "ייצוא EPUB"
+        btnEpub.onclick = () => exportEpubFull()
       }
 
       function showExportButtonsForPdf() {
@@ -1166,12 +1186,14 @@ pre{ white-space: pre-wrap; }`
           savePrefs(p)
           applyPrefs(p)
         }
+
         document.getElementById("btnPlus").onclick = () => {
           const p = loadPrefs()
           p.fs = clamp(p.fs + 1, 12, 34)
           savePrefs(p)
           applyPrefs(p)
         }
+
         document.getElementById("btnBook").onclick = () => {
           const p = loadPrefs()
           p.book = !p.book
@@ -1202,6 +1224,7 @@ pre{ white-space: pre-wrap; }`
         currentPath = path
         currentSafeHtml = ""
         currentPlainText = ""
+        currentTocItems = []
 
         meta.textContent = "path: " + path
 
@@ -1236,19 +1259,21 @@ pre{ white-space: pre-wrap; }`
             content.style.display = "block"
             content.innerHTML = safe
             currentSafeHtml = safe
-            showExportButtonsForHtml()
             buildNav()
+            showExportButtonsForHtmlOrText()
           } else {
             pre.style.display = "block"
             pre.textContent = text
             currentPlainText = text
-            showExportButtonsForHtml()
+            currentTocItems = []
+            showExportButtonsForHtmlOrText()
           }
         } else {
           pre.style.display = "block"
           pre.textContent = text
           currentPlainText = text
-          showExportButtonsForHtml()
+          currentTocItems = []
+          showExportButtonsForHtmlOrText()
         }
       }
 
