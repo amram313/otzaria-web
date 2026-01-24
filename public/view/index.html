@@ -218,6 +218,10 @@
         .printToc a { color: #000; text-decoration: underline; }
         .printBreak { page-break-after: always; }
       }
+
+      .catalogSearch { min-width: 180px; flex: 1 1 220px; padding: 8px 10px; font-size: 14px; border: 1px solid #ddd; border-radius: 10px; }
+
+
     </style>
 
     <script src="/vendor/jszip.min.js"></script>
@@ -227,6 +231,9 @@
     <div class="topbar">
       <div class="row">
         <button class="btn" onclick="history.back()">חזור</button>
+        <button class="btn" id="btnCatalog">קטלוג</button>
+        <input class="catalogSearch" id="catalogSearch" placeholder="חיפוש בקטלוג..." />
+        <button class="btn" id="btnCatalogSearch">חפש</button>
         <button class="btn" id="btnRaw">פתח מקור (RAW)</button>
         <button class="btn" id="btnToc" style="display:none;">תוכן עניינים</button>
 
@@ -283,6 +290,7 @@
     </aside>
 
     <script>
+
       let currentPath = ""
       let currentSafeHtml = ""
       let currentPlainText = ""
@@ -1338,13 +1346,34 @@ pre{ white-space:pre-wrap; }`
         }
       }
 
-      main().catch((e) => {
+      
+function openCatalog(restore) {
+  const q = (document.getElementById("catalogSearch").value || "").trim()
+  const u = new URL("/", location.origin)
+  if (q) u.searchParams.set("q", q)
+  if (restore) u.searchParams.set("restore", "1")
+  location.href = u.toString()
+}
+
+// חיבור כפתורים
+const btnCatalog = document.getElementById("btnCatalog")
+const btnCatalogSearch = document.getElementById("btnCatalogSearch")
+const catalogSearch = document.getElementById("catalogSearch")
+
+btnCatalog.onclick = () => openCatalog(true)
+btnCatalogSearch.onclick = () => openCatalog(false)
+catalogSearch.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") openCatalog(false)
+})
+
+main().catch((e) => {
         const loading = document.getElementById("loading")
         const err = document.getElementById("err")
         loading.style.display = "none"
         err.style.display = "block"
         err.textContent = String(e && e.message ? e.message : e)
       })
+    
     </script>
   </body>
 </html>
