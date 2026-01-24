@@ -135,7 +135,7 @@
         text-align: left;
       }
 
-      /* Drawer (תוכן עניינים) */
+      /* Drawer */
       .overlay{
         position: fixed;
         inset: 0;
@@ -159,13 +159,8 @@
         flex-direction: column;
       }
 
-      .drawer.open{
-        transform: translateX(0);
-      }
-
-      .overlay.open{
-        display: block;
-      }
+      .drawer.open{ transform: translateX(0); }
+      .overlay.open{ display: block; }
 
       .drawerTop{
         padding: 10px 12px;
@@ -194,34 +189,15 @@
         font-size: 13px;
       }
 
-      .toc a:hover{
-        background: #f3f3f3;
-      }
+      .toc a:hover{ background: #f3f3f3; }
 
       .toc .small{
         color: #666;
         font-size: 12px;
         padding: 6px 10px;
       }
-
-      /* ---------- PDF print TOC ---------- */
-      .printToc {
-        display: none;
-      }
-
-      @media print {
-        .topbar, .overlay, .drawer { display: none !important; }
-        body { background: #fff !important; }
-        .page { padding: 0 !important; }
-        .card { border: none !important; }
-        .printToc { display: block !important; }
-        .printToc h1 { margin: 0 0 12px 0; }
-        .printToc a { color: #000; text-decoration: none; }
-        .printBreak { page-break-after: always; }
-      }
     </style>
 
-    <!-- חובה ל-DOCX/EPUB בצד דפדפן -->
     <script src="/vendor/jszip.min.js"></script>
   </head>
 
@@ -232,7 +208,6 @@
         <button class="btn" id="btnRaw">פתח מקור (RAW)</button>
         <button class="btn" id="btnToc" style="display:none;">תוכן עניינים</button>
 
-        <!-- Export -->
         <button class="btn" id="btnExportPdf" style="display:none;">ייצוא PDF</button>
         <button class="btn" id="btnExportDocx" style="display:none;">ייצוא DOCX</button>
         <button class="btn" id="btnExportEpub" style="display:none;">ייצוא EPUB</button>
@@ -259,7 +234,6 @@
     <div class="page">
       <div class="reader">
         <div class="card" id="card">
-          <!-- TOC for print will be injected here -->
           <div class="loading" id="loading">טוען…</div>
 
           <div class="content" id="content" style="display:none;"></div>
@@ -308,7 +282,7 @@
 
       function looksLikeHtml(text){
         const t = String(text || "")
-        return /<\/?(h1|h2|h3|p|b|strong|div|span)\b/i.test(t)
+        return /<\/?(h1|h2|h3|p|b|strong|div|span|br)\b/i.test(t)
       }
 
       function sanitizeHtml(html){
@@ -364,7 +338,7 @@
         el.scrollIntoView({ behavior: "smooth", block: "start" })
       }
 
-      // Drawer control
+      // Drawer
       function openToc(){
         document.getElementById("overlay").classList.add("open")
         document.getElementById("drawer").classList.add("open")
@@ -375,7 +349,7 @@
         document.getElementById("drawer").classList.remove("open")
       }
 
-      // ----------- TOC: one list, indentation by H-level (H1..H4)
+      // ----------- TOC build (for site + for exports)
       function buildNav(){
         const content = document.getElementById("content")
         const nodes = Array.from(content.querySelectorAll("h1, h2, h3, h4"))
@@ -527,62 +501,90 @@
       function getTitleFromDom() {
         const h1 = document.querySelector("#content h1")
         const t = h1 ? (h1.textContent || "").trim() : ""
-        return t || "ספר"
+        return t || "מסמך"
       }
 
-      // ---------- PDF: create an on-print TOC page + print
-      function exportPdfPrintWithToc() {
-        const card = document.getElementById("card")
-
-        // remove old
-        const old = document.getElementById("printToc")
-        if (old) old.remove()
-
-        const toc = document.createElement("div")
-        toc.id = "printToc"
-        toc.className = "printToc"
-
+      // ==========================
+      // PDF export (simple, client-side)
+      // NOTE: Browsers often do NOT preserve internal #anchor links in printed PDF.
+      // We still generate a clean print document with TOC + links.
+      // ==========================
+      function exportPdfPrintWithTocSimple() {
+        const title = getTitleFromDom()
         const items = Array.isArray(currentTocItems) ? currentTocItems : []
-        let list = ""
-        if (items.length) {
-          list += "<ol style=\"margin:0; padding:0 18px 0 0;\">"
-          items.forEach((it) => {
-            const indent = (Math.max(1, it.level) - 1) * 14
-            list += (
-              "<li style=\"margin-right:" + indent + "px; margin-bottom:6px;\">" +
-                "<a href=\"#" + it.id + "\">" + xmlEscape(it.label) + "</a>" +
-              "</li>"
-            )
-          })
-          list += "</ol>"
-        } else {
-          list = "<div style=\"color:#666;\">(אין כותרות ליצירת תוכן עניינים)</div>"
+
+        const tocHtml = items.length
+          ? "<ol style=\"margin:0; padding:0 18px 0 0;\">" +
+            items.map(it => {
+              const indent = (Math.max(1, it.level) - 1) * 14
+              return (
+                "<li style=\"margin-right:" + indent + "px; margin-bottom:6px;\">" +
+                  "<a href=\"#" + it.id + "\" style=\"color:#000; text-decoration:none;\">" + xmlEscape(it.label) + "</a>" +
+                "</li>"
+              )
+            }).join("") +
+            "</ol>"
+          : "<div style=\"color:#666;\">(אין כותרות ליצירת תוכן עניינים)</div>"
+
+        const bodyHtml =
+          "<h1 style=\"margin:0 0 12px 0;\">" + xmlEscape(title) + "</h1>" +
+          "<h2 style=\"margin:0 0 10px 0; font-size:18px;\">תוכן עניינים</h2>" +
+          tocHtml +
+          "<div style=\"page-break-after:always;\"></div>" +
+          (currentSafeHtml ? currentSafeHtml : "<pre style=\"white-space:pre-wrap;\">" + xmlEscape(currentPlainText || "") + "</pre>")
+
+        const html =
+`<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>${xmlEscape(title)}</title>
+  <style>
+    body{ font-family: Arial, system-ui; direction: rtl; }
+    .wrap{ max-width: 980px; margin: 0 auto; }
+    h1{ font-size: 26px; }
+    h2{ font-size: 20px; }
+    h3{ font-size: 18px; }
+    p{ margin: 10px 0; line-height: 1.8; }
+    @page { margin: 14mm; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    ${bodyHtml}
+  </div>
+  <script>
+    setTimeout(() => window.print(), 50)
+  </script>
+</body>
+</html>`
+
+        const frame = document.createElement("iframe")
+        frame.style.position = "fixed"
+        frame.style.right = "0"
+        frame.style.bottom = "0"
+        frame.style.width = "0"
+        frame.style.height = "0"
+        frame.style.border = "0"
+        document.body.appendChild(frame)
+
+        frame.onload = () => {
+          // Cleanup after print (best effort)
+          const cleanup = () => {
+            window.removeEventListener("focus", cleanup)
+            setTimeout(() => frame.remove(), 500)
+          }
+          window.addEventListener("focus", cleanup)
         }
 
-        toc.innerHTML =
-          "<h1>תוכן עניינים</h1>" +
-          list +
-          "<div class=\"printBreak\"></div>"
-
-        card.insertBefore(toc, card.firstChild)
-
-        const cleanup = () => {
-          const x = document.getElementById("printToc")
-          if (x) x.remove()
-          window.removeEventListener("afterprint", cleanup)
-        }
-        window.addEventListener("afterprint", cleanup)
-
-        window.print()
+        frame.srcdoc = html
       }
 
       // ==========================
-      // DOCX: full text + headings + TOC field
+      // DOCX export: full text + clickable TOC + Heading styles
       // ==========================
-
       function normalizeSpacesKeepNewlines(s) {
         const x = String(s || "").replace(/\r\n/g, "\n")
-        // לא מוחק שורות; מנקה רווחים מיותרים
         return x
           .replace(/[ \t]+\n/g, "\n")
           .replace(/\n[ \t]+/g, "\n")
@@ -590,7 +592,6 @@
 
       function splitToParagraphs(text) {
         const t = normalizeSpacesKeepNewlines(text)
-        // פסקאות לפי שורה ריקה
         const parts = t.split(/\n\s*\n+/g)
         return parts
           .map(p => p.replace(/\n+/g, "\n").trim())
@@ -601,17 +602,10 @@
         let out = ""
         function walk(n) {
           if (!n) return
-          if (n.nodeType === Node.TEXT_NODE) {
-            out += n.nodeValue || ""
-            return
-          }
+          if (n.nodeType === Node.TEXT_NODE) { out += n.nodeValue || ""; return }
           if (n.nodeType === Node.ELEMENT_NODE) {
             const tag = (n.tagName || "").toUpperCase()
-            if (tag === "BR") {
-              out += "\n"
-              return
-            }
-            // אל תכניס טקסט של script/style
+            if (tag === "BR") { out += "\n"; return }
             if (tag === "SCRIPT" || tag === "STYLE") return
             for (const c of Array.from(n.childNodes || [])) walk(c)
           }
@@ -620,14 +614,13 @@
         return out
       }
 
-      // Collect blocks in visual order, including loose text nodes between headings
       function collectDocxBlocksFromRoot(root) {
         const blocks = []
         let buffer = ""
 
-        function flushBufferAsParagraphs() {
+        function flushBuffer() {
           const paras = splitToParagraphs(buffer)
-          paras.forEach((p) => blocks.push({ type: "p", text: p }))
+          paras.forEach(p => blocks.push({ type: "p", text: p }))
           buffer = ""
         }
 
@@ -639,7 +632,7 @@
 
         function addParagraph(text) {
           const paras = splitToParagraphs(text)
-          paras.forEach((p) => blocks.push({ type: "p", text: p }))
+          paras.forEach(p => blocks.push({ type: "p", text: p }))
         }
 
         function walk(node) {
@@ -654,94 +647,40 @@
 
           const tag = (node.tagName || "").toUpperCase()
 
-          // Headings: treat as blocks and flush buffer before them
           if (tag === "H1" || tag === "H2" || tag === "H3" || tag === "H4") {
-            flushBufferAsParagraphs()
-            const lvl = Number(tag.slice(1))
-            addHeading(lvl, node.textContent || "")
+            flushBuffer()
+            addHeading(Number(tag.slice(1)), node.textContent || "")
             return
           }
 
-          if (tag === "BR") {
-            buffer += "\n"
-            return
-          }
+          if (tag === "BR") { buffer += "\n"; return }
 
-          // Block-level elements that should become paragraphs
           if (tag === "P" || tag === "BLOCKQUOTE" || tag === "PRE") {
-            flushBufferAsParagraphs()
-            const txt = textFromNodeWithBr(node)
-            addParagraph(txt)
+            flushBuffer()
+            addParagraph(textFromNodeWithBr(node))
             return
           }
 
-          // Lists: each LI as paragraph with bullet
           if (tag === "LI") {
-            flushBufferAsParagraphs()
+            flushBuffer()
             const txt = textFromNodeWithBr(node).replace(/\s+/g, " ").trim()
             if (txt) blocks.push({ type: "p", text: "• " + txt })
             return
           }
 
-          // For other containers, walk children to catch loose text
           for (const c of Array.from(node.childNodes || [])) walk(c)
 
-          // Add a newline boundary after some container types to keep paragraphs separated
-          if (tag === "DIV" || tag === "SECTION" || tag === "ARTICLE") {
-            buffer += "\n\n"
-          }
+          if (tag === "DIV" || tag === "SECTION" || tag === "ARTICLE") buffer += "\n\n"
         }
 
         walk(root)
-        flushBufferAsParagraphs()
+        flushBuffer()
         return blocks
       }
 
-      function docxRunXml(text, bold, size) {
-        const b = bold ? "<w:b/>" : ""
-        const sz = size ? (
-          "<w:sz w:val=\"" + size + "\"/>" +
-          "<w:szCs w:val=\"" + size + "\"/>"
-        ) : ""
-        return (
-          "<w:r>" +
-            "<w:rPr><w:rtl/>" + b + sz + "</w:rPr>" +
-            "<w:t xml:space=\"preserve\">" + xmlEscape(text) + "</w:t>" +
-          "</w:r>"
-        )
-      }
-
-      function docxParagraphXml(text, opts) {
-        const o = opts || {}
-        const pStyle = o.pStyle ? "<w:pStyle w:val=\"" + o.pStyle + "\"/>" : ""
-        const jc = "<w:jc w:val=\"right\"/>"
-        const bidi = "<w:bidi/>"
-        const spacing = o.spacing ? o.spacing : "<w:spacing w:after=\"120\"/>"
-
-        return (
-          "<w:p>" +
-            "<w:pPr>" + pStyle + jc + bidi + spacing + "</w:pPr>" +
-            docxRunXml(text, !!o.bold, o.size) +
-          "</w:p>"
-        )
-      }
-
-      function docxPageBreakXml() {
-        return "<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>"
-      }
-
-      function docxTocFieldXml() {
-        // Word will usually require "Update field" once to populate
-        return (
-          "<w:p>" +
-            "<w:pPr><w:jc w:val=\"right\"/><w:bidi/></w:pPr>" +
-            "<w:fldSimple w:instr=\"TOC \\\\o &quot;1-4&quot; \\\\h \\\\z \\\\u\"/>" +
-          "</w:p>"
-        )
-      }
+      function xmlEsc(s){ return xmlEscape(s) }
 
       function docxStylesXml() {
-        // Minimal styles to ensure Heading1-Heading4 exist + RTL right align
         return (
 `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -833,7 +772,7 @@
   xmlns:dc="http://purl.org/dc/elements/1.1/"
   xmlns:dcterms="http://purl.org/dc/terms/"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>${xmlEscape(title)}</dc:title>
+  <dc:title>${xmlEsc(title)}</dc:title>
   <dc:language>he-IL</dc:language>
   <dcterms:created xsi:type="dcterms:W3CDTF">${nowIso}</dcterms:created>
 </cp:coreProperties>`
@@ -850,38 +789,132 @@
         )
       }
 
-      async function exportDocxFull() {
+      function docxPageBreakXml() {
+        return "<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>"
+      }
+
+      function docxTextRunXml(text, opts) {
+        const o = opts || {}
+        const b = o.bold ? "<w:b/>" : ""
+        const u = o.underline ? "<w:u w:val=\"single\"/>" : ""
+        const color = o.color ? "<w:color w:val=\"" + o.color + "\"/>" : ""
+        const sz = o.size ? (
+          "<w:sz w:val=\"" + o.size + "\"/>" +
+          "<w:szCs w:val=\"" + o.size + "\"/>"
+        ) : ""
+        return (
+          "<w:r>" +
+            "<w:rPr><w:rtl/>" + b + u + color + sz + "</w:rPr>" +
+            "<w:t xml:space=\"preserve\">" + xmlEsc(text) + "</w:t>" +
+          "</w:r>"
+        )
+      }
+
+      function docxPPrXml(pStyle, indentLevelTwips) {
+        // indent right for RTL
+        const ind = indentLevelTwips ? "<w:ind w:right=\"" + indentLevelTwips + "\"/>" : ""
+        return (
+          "<w:pPr>" +
+            (pStyle ? "<w:pStyle w:val=\"" + pStyle + "\"/>" : "") +
+            "<w:jc w:val=\"right\"/>" +
+            "<w:bidi/>" +
+            ind +
+          "</w:pPr>"
+        )
+      }
+
+      function docxParagraphXml(text, pStyle) {
+        return "<w:p>" + docxPPrXml(pStyle || "Normal", 0) + docxTextRunXml(text, {}) + "</w:p>"
+      }
+
+      function docxBookmarkStartXml(id, name) {
+        return "<w:bookmarkStart w:id=\"" + id + "\" w:name=\"" + xmlEsc(name) + "\"/>"
+      }
+
+      function docxBookmarkEndXml(id) {
+        return "<w:bookmarkEnd w:id=\"" + id + "\"/>"
+      }
+
+      function docxHyperlinkParaXml(anchorName, text, level) {
+        // indent per level (Heading1=0, Heading2=360, Heading3=720, Heading4=1080)
+        const indent = Math.max(0, (Math.max(1, level) - 1) * 360)
+
+        return (
+          "<w:p>" +
+            docxPPrXml("Normal", indent) +
+            "<w:hyperlink w:anchor=\"" + xmlEsc(anchorName) + "\" w:history=\"1\">" +
+              docxTextRunXml(text, { underline: true, color: "0563C1" }) +
+            "</w:hyperlink>" +
+          "</w:p>"
+        )
+      }
+
+      async function exportDocxFullClickableToc() {
         if (!requireJSZip()) return
+
         const title = getTitleFromDom()
         const outName = fileStem(baseNameFromPath(currentPath)) + ".docx"
 
-        // Collect blocks from current DOM (includes loose text!)
         const root = document.getElementById("content")
         let blocks = []
-
         if (root && root.style.display !== "none") {
           blocks = collectDocxBlocksFromRoot(root)
         } else {
-          // fallback: from plain text
           const paras = splitToParagraphs(currentPlainText || "")
           blocks = paras.map(p => ({ type: "p", text: p }))
-          if (!blocks.length) blocks = [{ type:"p", text:"(ריק)" }]
         }
 
-        // Build document XML:
-        // 1) TOC page (heading + field) + page break
-        // 2) Content with heading styles
-        let bodyXml = ""
-        bodyXml += docxParagraphXml("תוכן עניינים", { pStyle: "Heading1", bold: true })
-        bodyXml += docxTocFieldXml()
-        bodyXml += docxPageBreakXml()
+        // Build heading bookmarks + toc list
+        let bmId = 10
+        const tocEntries = [] // {name, text, level}
+        const bodyParts = []
 
+        // DOCX manual TOC (clickable)
+        bodyParts.push(docxParagraphXml("תוכן עניינים", "Heading1"))
+        // list
+        let headingIndex = 0
         blocks.forEach((b) => {
           if (b.type === "h") {
             const lvl = clamp(Number(b.level || 1), 1, 4)
-            bodyXml += docxParagraphXml(b.text, { pStyle: "Heading" + lvl, bold: true })
+            const name = "bm_" + headingIndex++
+            tocEntries.push({ name, text: b.text, level: lvl })
+          }
+        })
+
+        if (tocEntries.length) {
+          tocEntries.forEach((t) => {
+            bodyParts.push(docxHyperlinkParaXml(t.name, t.text, t.level))
+          })
+        } else {
+          bodyParts.push(docxParagraphXml("(אין כותרות ליצירת תוכן עניינים)", "Normal"))
+        }
+
+        bodyParts.push(docxPageBreakXml())
+
+        // Content with Heading styles + bookmarks at each heading
+        let tocCursor = 0
+        blocks.forEach((b) => {
+          if (b.type === "h") {
+            const lvl = clamp(Number(b.level || 1), 1, 4)
+            const pStyle = "Heading" + lvl
+
+            const entry = tocEntries[tocCursor++]
+            const bmName = entry ? entry.name : ("bm_" + (headingIndex++))
+
+            const start = docxBookmarkStartXml(bmId, bmName)
+            const end = docxBookmarkEndXml(bmId)
+            bmId++
+
+            bodyParts.push(
+              "<w:p>" +
+                docxPPrXml(pStyle, 0) +
+                start +
+                docxTextRunXml(b.text, { bold: true }) +
+                end +
+              "</w:p>"
+            )
           } else {
-            bodyXml += docxParagraphXml(b.text, { pStyle: "Normal", bold: false })
+            bodyParts.push(docxParagraphXml(b.text, "Normal"))
           }
         })
 
@@ -889,19 +922,17 @@
 `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
-    ${bodyXml}
+    ${bodyParts.join("")}
     <w:sectPr/>
   </w:body>
 </w:document>`
 
         const zip = new JSZip()
         zip.file("[Content_Types].xml", docxContentTypesXml())
-
         zip.folder("_rels").file(".rels", docxRootRelsXml())
         zip.folder("word").file("document.xml", documentXml)
         zip.folder("word").file("styles.xml", docxStylesXml())
         zip.folder("word").folder("_rels").file("document.xml.rels", docxDocumentRelsXml())
-
         zip.folder("docProps").file("core.xml", docxCoreXml(title))
         zip.folder("docProps").file("app.xml", docxAppXml())
 
@@ -911,25 +942,19 @@
         })
 
         downloadBlob(blob, outName)
-
-        // רמז למשתמש: TOC דורש עדכון שדה פעם אחת
-        alert("DOCX ירד. בוורד: קליק ימני על תוכן העניינים → Update Field (או Update Table) כדי שימלא.")
       }
 
       // ==========================
-      // EPUB: hierarchical nav.xhtml + toc.ncx
+      // EPUB export: TOC inside book + nav.xhtml + toc.ncx
       // ==========================
       function ensureHeadingIds(html) {
         const doc = new DOMParser().parseFromString(html, "text/html")
         const headings = doc.querySelectorAll("h1,h2,h3,h4")
-        headings.forEach((h, i) => {
-          if (!h.id) h.id = "h-" + i
-        })
+        headings.forEach((h, i) => { if (!h.id) h.id = "h-" + i })
         return { doc, headings }
       }
 
-      function buildEpubNavNested(headings) {
-        // Proper nested <ol> based on heading levels 1..4
+      function buildNestedOlFromHeadings(headings, hrefPrefix) {
         const items = Array.from(headings).map((h) => {
           const lvl = clamp(Number(String(h.tagName).slice(1)), 1, 4)
           const id = String(h.id || "").trim()
@@ -943,62 +968,47 @@
         let level = 0
         let openLi = false
 
-        function openOl() { out.push("<ol>") }
-        function closeOl() { out.push("</ol>") }
-        function closeLiIfOpen() { if (openLi) { out.push("</li>"); openLi = false } }
+        function openOl(){ out.push("<ol>") }
+        function closeOl(){ out.push("</ol>") }
+        function closeLiIfOpen(){ if (openLi) { out.push("</li>"); openLi = false } }
 
-        for (let i = 0; i < items.length; i++) {
-          let lvl = items[i].lvl
-          if (lvl < 1) lvl = 1
-
-          // First item: force at least one <ol>
+        for (const it of items) {
           if (level === 0) { openOl(); level = 1 }
 
-          // Adjust level
-          while (lvl > level) {
-            // nested list inside current li
-            if (openLi) {
-              out.push("<ol>")
-              openLi = false
-            } else {
-              out.push("<ol>")
-            }
+          while (it.lvl > level) {
+            out.push("<ol>")
             level++
           }
-
-          while (lvl < level) {
+          while (it.lvl < level) {
             closeLiIfOpen()
             closeOl()
             level--
           }
 
           closeLiIfOpen()
-          out.push("<li><a href=\"content.xhtml#" + xmlEscape(items[i].id) + "\">" + xmlEscape(items[i].txt) + "</a>")
+          out.push(
+            "<li><a href=\"" + hrefPrefix + "#" + xmlEscape(it.id) + "\">" +
+            xmlEscape(it.txt) +
+            "</a>"
+          )
           openLi = true
         }
 
         closeLiIfOpen()
-        while (level > 0) {
-          closeOl()
-          level--
-        }
-
+        while (level > 0) { closeOl(); level-- }
         return out.join("")
       }
 
       function buildNcxFromHeadings(headings, uid, title) {
-        // Minimal NCX for better compatibility
         const items = Array.from(headings).map((h) => {
-          const lvl = clamp(Number(String(h.tagName).slice(1)), 1, 4)
           const id = String(h.id || "").trim()
           const txt = (h.textContent || "").trim() || "כותרת"
-          return { lvl, id, txt }
+          return { id, txt }
         }).filter(x => x.id)
 
         let play = 1
         const navPoints = items.slice(0, 800).map((it) => {
           const pid = "navPoint-" + play
-          const indent = it.lvl
           const order = play++
           return (
             "<navPoint id=\"" + pid + "\" playOrder=\"" + order + "\">" +
@@ -1027,7 +1037,7 @@
         )
       }
 
-      async function exportEpubFull() {
+      async function exportEpubFullClickableToc() {
         if (!requireJSZip()) return
 
         const title = getTitleFromDom()
@@ -1035,11 +1045,20 @@
 
         let html = currentSafeHtml
         if (!html) {
-          // fallback: plain text
           html = "<h1>" + xmlEscape(title) + "</h1><pre>" + xmlEscape(currentPlainText || "") + "</pre>"
         }
 
         const { doc, headings } = ensureHeadingIds(html)
+
+        // TOC embedded inside content.xhtml (clickable)
+        const embeddedToc = (
+          "<nav id=\"toc\" style=\"border:1px solid #ddd; padding:12px; border-radius:10px;\">" +
+            "<h2 style=\"margin:0 0 10px 0;\">תוכן עניינים</h2>" +
+            buildNestedOlFromHeadings(headings, "content.xhtml") +
+          "</nav>" +
+          "<div style=\"height:12px\"></div>"
+        )
+        doc.body.innerHTML = embeddedToc + doc.body.innerHTML
         const xhtmlBody = doc.body.innerHTML
 
         const xhtml =
@@ -1056,8 +1075,7 @@
   </body>
 </html>`
 
-        const navOl = buildEpubNavNested(headings)
-
+        // nav.xhtml (reader TOC)
         const navXhtml =
 `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
@@ -1069,7 +1087,7 @@
   <body>
     <nav epub:type="toc" id="toc" role="doc-toc" xmlns:epub="http://www.idpf.org/2007/ops">
       <h1>תוכן עניינים</h1>
-      ${navOl}
+      ${buildNestedOlFromHeadings(headings, "content.xhtml")}
     </nav>
   </body>
 </html>`
@@ -1137,7 +1155,7 @@ pre{ white-space: pre-wrap; }`
       }
 
       // ==========================
-      // Export button wiring
+      // Export buttons
       // ==========================
       function showExportButtonsForHtmlOrText() {
         const btnPdf = document.getElementById("btnExportPdf")
@@ -1146,15 +1164,15 @@ pre{ white-space: pre-wrap; }`
 
         btnPdf.style.display = "inline-block"
         btnPdf.textContent = "ייצוא PDF"
-        btnPdf.onclick = () => exportPdfPrintWithToc()
+        btnPdf.onclick = () => exportPdfPrintWithTocSimple()
 
         btnDocx.style.display = "inline-block"
         btnDocx.textContent = "ייצוא DOCX"
-        btnDocx.onclick = () => exportDocxFull()
+        btnDocx.onclick = () => exportDocxFullClickableToc()
 
         btnEpub.style.display = "inline-block"
         btnEpub.textContent = "ייצוא EPUB"
-        btnEpub.onclick = () => exportEpubFull()
+        btnEpub.onclick = () => exportEpubFullClickableToc()
       }
 
       function showExportButtonsForPdf() {
