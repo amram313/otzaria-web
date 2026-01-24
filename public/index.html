@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>ספרייה - קטלוג</title>
+    <script src="/vendor/jszip.min.js"></script>
     <style>
       body { font-family: system-ui, Arial; margin: 16px; }
       .row { margin-top: 10px; }
@@ -22,6 +23,13 @@
       iframe { width: 100%; height: 70vh; border: 1px solid #ddd; border-radius: 10px; }
       label { user-select: none; }
       .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+      select { padding: 8px 10px; font-size: 14px; border: 1px solid #ddd; border-radius: 10px; background: #fff; }
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+      .chip { border: 1px solid #ddd; background: #fff; border-radius: 999px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+      .chip.active { border-color: #666; font-weight: 700; }
+
+
     </style>
   </head>
 
@@ -32,7 +40,8 @@
     </div>
 
     <div class="row toolbar">
-      <button id="btnLoad" onclick="loadCatalog()">טען קטלוג</button>
+      <button id="btnLoad" onclick="forceReload()">רענן קטלוג</button>
+      <button class="btnSmall" onclick="clearCacheUi()">נקה מטמון</button>
       <button onclick="scrollToResults()">לתוצאות</button>
       <button onclick="openPathInNewTab()">פתח נתיב ידני בטאב</button>
       <button onclick="openPathInline()">צפה בנתיב ידני כאן</button>
@@ -49,6 +58,17 @@
     <div class="row">
       <input id="q" placeholder="חיפוש (כותרת/מחבר/נתיב)..." oninput="onSearchInput()" />
     </div>
+    <div class="row">
+      <div class="toolbar">
+        <span class="pill">קטגוריה</span>
+        <select id="cat" onchange="onCategoryChange()"></select>
+        <select id="subcat" onchange="onSubCategoryChange()" style="display:none;"></select>
+        <button class="btnSmall" onclick="clearCategory()">נקה</button>
+        <span class="pill" id="catInfo">—</span>
+      </div>
+      <div class="chips" id="catChips"></div>
+    </div>
+
 
     <div class="row">
       <input id="path" placeholder="נתיב ידני בתוך הריפו (למשל: .../file.pdf)" />
@@ -67,11 +87,19 @@
     <div id="results" class="grid"></div>
 
     <script>
-      let items = []
-      let currentList = []
-      let renderCursor = 0
-      const PAGE_SIZE = 60
 
+      let items = []
+let currentList = []
+let renderCursor = 0
+const PAGE_SIZE = 60
+
+let selectedCat = ""
+let selectedSub = ""
+
+const CACHE_VERSION = 3
+const CACHE_KEY = `otzaria.catalog.v${CACHE_VERSION}`
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6 שעות
+const SESSION_KEY = "otzaria.catalog.state"
       function setStatus(text) {
         document.getElementById("status").textContent = text
       }
@@ -79,6 +107,360 @@
       function tick() {
         return new Promise(r => setTimeout(r, 0))
       }
+
+function nowMs() { return Date.now() }
+
+function safeJsonParse(s) {
+  try { return JSON.parse(s) } catch (e) { return null }
+}
+
+function getUrlState() {
+  const u = new URL(location.href)
+  return {
+    q: u.searchParams.get("q") || "",
+    cat: u.searchParams.get("cat") || "",
+    sub: u.searchParams.get("sub") || "",
+    all: u.searchParams.get("all") === "1",
+    restore: u.searchParams.get("restore") === "1"
+  }
+}
+
+function updateUrlFromState() {
+  const u = new URL(location.href)
+  const q = document.getElementById("q").value.trim()
+  const cat = document.getElementById("cat").value || ""
+  const sub = (document.getElementById("subcat").style.display === "none") ? "" : (document.getElementById("subcat").value || "")
+  const all = document.getElementById("showAll").checked
+
+  if (q) u.searchParams.set("q", q)
+  else u.searchParams.delete("q")
+
+  if (cat) u.searchParams.set("cat", cat)
+  else u.searchParams.delete("cat")
+
+  if (sub) u.searchParams.set("sub", sub)
+  else u.searchParams.delete("sub")
+
+  if (all) u.searchParams.set("all", "1")
+  else u.searchParams.delete("all")
+
+  u.searchParams.delete("restore")
+
+  history.replaceState(null, "", u.toString())
+}
+
+function saveUiStateToSession(extra) {
+  const state = {
+    v: CACHE_VERSION,
+    q: document.getElementById("q").value || "",
+    cat: document.getElementById("cat").value || "",
+    sub: (document.getElementById("subcat").style.display === "none") ? "" : (document.getElementById("subcat").value || ""),
+    all: !!document.getElementById("showAll").checked,
+    scrollY: window.scrollY || 0,
+    ts: nowMs(),
+    ...(extra || {})
+  }
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(state)) } catch (e) {}
+}
+
+function restoreUiStateFromSession() {
+  const raw = (() => { try { return sessionStorage.getItem(SESSION_KEY) } catch (e) { return null } })()
+  const st = safeJsonParse(raw || "")
+  if (!st || st.v !== CACHE_VERSION) return null
+  return st
+}
+
+async function idbOpen() {
+  return await new Promise((resolve, reject) => {
+    if (!("indexedDB" in window)) return resolve(null)
+    const req = indexedDB.open("otzaria-cache", 1)
+    req.onerror = () => resolve(null)
+    req.onupgradeneeded = () => {
+      const db = req.result
+      if (!db.objectStoreNames.contains("kv")) db.createObjectStore("kv")
+    }
+    req.onsuccess = () => resolve(req.result)
+  })
+}
+
+async function idbGet(key) {
+  const db = await idbOpen()
+  if (!db) return null
+  return await new Promise((resolve) => {
+    const tx = db.transaction("kv", "readonly")
+    const st = tx.objectStore("kv")
+    const r = st.get(key)
+    r.onerror = () => resolve(null)
+    r.onsuccess = () => resolve(r.result ?? null)
+  })
+}
+
+async function idbSet(key, val) {
+  const db = await idbOpen()
+  if (!db) return false
+  return await new Promise((resolve) => {
+    const tx = db.transaction("kv", "readwrite")
+    const st = tx.objectStore("kv")
+    const r = st.put(val, key)
+    r.onerror = () => resolve(false)
+    r.onsuccess = () => resolve(true)
+  })
+}
+
+async function idbDel(key) {
+  const db = await idbOpen()
+  if (!db) return false
+  return await new Promise((resolve) => {
+    const tx = db.transaction("kv", "readwrite")
+    const st = tx.objectStore("kv")
+    const r = st.delete(key)
+    r.onerror = () => resolve(false)
+    r.onsuccess = () => resolve(true)
+  })
+}
+
+function uint8ToBase64(u8) {
+  let out = ""
+  const CHUNK = 0x8000
+  for (let i = 0; i < u8.length; i += CHUNK) {
+    out += String.fromCharCode.apply(null, u8.subarray(i, i + CHUNK))
+  }
+  return btoa(out)
+}
+
+function base64ToUint8(b64) {
+  const bin = atob(String(b64 || ""))
+  const out = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+  return out
+}
+
+async function compressJsonToString(obj) {
+  const raw = JSON.stringify(obj)
+  if (!window.JSZip) return { algo: "plain", data: raw }
+
+  const zip = new JSZip()
+  zip.file("data.json", raw)
+  const u8 = await zip.generateAsync({
+    type: "uint8array",
+    compression: "DEFLATE",
+    compressionOptions: { level: 6 }
+  })
+  return { algo: "zip", data: uint8ToBase64(u8) }
+}
+
+async function decompressStringToJson(algo, data) {
+  if (algo === "plain") return safeJsonParse(String(data || ""))
+
+  if (algo === "zip") {
+    if (!window.JSZip) return null
+    const u8 = base64ToUint8(data)
+    const zip = await JSZip.loadAsync(u8)
+    const raw = await zip.file("data.json").async("string")
+    return safeJsonParse(raw)
+  }
+
+  return null
+}
+
+async function cacheRead() {
+  const stored = await idbGet(CACHE_KEY) || (() => {
+    try { return localStorage.getItem(CACHE_KEY) } catch (e) { return null }
+  })()
+
+  if (!stored) return null
+  const env = safeJsonParse(stored)
+  if (!env || env.v !== CACHE_VERSION || !env.payload) return null
+
+  const obj = await decompressStringToJson(env.payload.algo, env.payload.data)
+  if (!obj || obj.v !== CACHE_VERSION || !Array.isArray(obj.items)) return null
+
+  return obj
+}
+
+async function cacheWrite(itemsList) {
+  const obj = { v: CACHE_VERSION, savedAt: nowMs(), items: itemsList }
+  const payload = await compressJsonToString(obj)
+  const env = { v: CACHE_VERSION, payload }
+  const str = JSON.stringify(env)
+
+  await idbSet(CACHE_KEY, str)
+  try { localStorage.setItem(CACHE_KEY, str) } catch (e) {}
+}
+
+async function cacheClear() {
+  await idbDel(CACHE_KEY)
+  try { localStorage.removeItem(CACHE_KEY) } catch (e) {}
+}
+
+function clearCacheUi() {
+  cacheClear().then(() => {
+    setStatus("מטמון נוקה")
+  }).catch(() => {
+    setStatus("מטמון נוקה")
+  })
+}
+
+function normLabel(s) {
+  return String(s || "").trim().replaceAll("_", " ").replace(/\s+/g, " ")
+}
+
+function isFormatDir(seg) {
+  const s = String(seg || "").toLowerCase()
+  return ["pdf", "epub", "docx", "html", "txt", "text", "books", "book", "lib", "library"].includes(s)
+}
+
+function categoryFromPath(p) {
+  const parts = String(p || "").split("/").filter(Boolean)
+  if (!parts.length) return ""
+  let i = 0
+  if (isFormatDir(parts[0])) i = 1
+  if (parts[i] && ["ספרים", "ספריה", "ספרייה", "books", "library", "lib"].includes(String(parts[i]).toLowerCase())) i++
+  return normLabel(parts[i] || "")
+}
+
+function subCategoryFromPath(p) {
+  const parts = String(p || "").split("/").filter(Boolean)
+  if (!parts.length) return ""
+  let i = 0
+  if (isFormatDir(parts[0])) i = 1
+  if (parts[i] && ["ספרים", "ספריה", "ספרייה", "books", "library", "lib"].includes(String(parts[i]).toLowerCase())) i++
+  return normLabel(parts[i + 1] || "")
+}
+
+function deriveCategory(meta) {
+  const o = meta && meta._raw ? meta._raw : {}
+  const val = getAny(o, ["category", "categories", "section", "type", "topic", "topics", "subject", "subjects", "genre", "collection", "group", "folder"])
+  const v = Array.isArray(val) ? val[0] : val
+  const cat = normLabel(v || "") || categoryFromPath(meta.path)
+  return cat || "לא מסווג"
+}
+
+function deriveSubCategory(meta) {
+  const o = meta && meta._raw ? meta._raw : {}
+  const val = getAny(o, ["subcategory", "sub_category", "sub", "subtopic", "sub_topic", "subSection", "sub_section"])
+  const v = Array.isArray(val) ? val[0] : val
+  const sub = normLabel(v || "") || subCategoryFromPath(meta.path)
+  return sub
+}
+
+function buildCategoryIndex(list) {
+  const cats = new Map()
+  for (const it of list) {
+    const cat = normLabel(it.cat || "לא מסווג") || "לא מסווג"
+    const sub = normLabel(it.sub || "")
+    if (!cats.has(cat)) cats.set(cat, { total: 0, withFile: 0, subs: new Map() })
+    const c = cats.get(cat)
+    c.total++
+    if (it.path) c.withFile++
+
+    if (sub) {
+      if (!c.subs.has(sub)) c.subs.set(sub, { total: 0, withFile: 0 })
+      const sc = c.subs.get(sub)
+      sc.total++
+      if (it.path) sc.withFile++
+    }
+  }
+  return cats
+}
+
+function renderCategories() {
+  const catSel = document.getElementById("cat")
+  const subSel = document.getElementById("subcat")
+  const chips = document.getElementById("catChips")
+
+  const prevCat = catSel.value || ""
+  const prevSub = subSel.value || ""
+
+  catSel.innerHTML = ""
+  const optAll = document.createElement("option")
+  optAll.value = ""
+  optAll.textContent = "הכל"
+  catSel.appendChild(optAll)
+
+  const entries = Array.from(categoryIndex.entries())
+    .sort((a, b) => b[1].total - a[1].total)
+
+  for (const [cat, info] of entries) {
+    const opt = document.createElement("option")
+    opt.value = cat
+    opt.textContent = `${cat} (${info.total})`
+    catSel.appendChild(opt)
+  }
+
+  // chips (טופ 12)
+  chips.innerHTML = ""
+  const top = entries.slice(0, 12)
+  for (const [cat] of top) {
+    const b = document.createElement("button")
+    b.className = "chip" + ((cat === selectedCat) ? " active" : "")
+    b.textContent = cat
+    b.onclick = () => {
+      catSel.value = cat
+      onCategoryChange()
+    }
+    chips.appendChild(b)
+  }
+
+  catSel.value = (prevCat && categoryIndex.has(prevCat)) ? prevCat : ""
+  onCategoryChange(true)
+
+  if (prevSub) {
+    subSel.value = prevSub
+  }
+}
+
+function onCategoryChange(skipApply) {
+  const catSel = document.getElementById("cat")
+  const subSel = document.getElementById("subcat")
+  selectedCat = catSel.value || ""
+  selectedSub = ""
+
+  if (!selectedCat) {
+    subSel.style.display = "none"
+    subSel.innerHTML = ""
+  } else {
+    const info = categoryIndex.get(selectedCat)
+    const subs = info ? Array.from(info.subs.entries()).sort((a, b) => b[1].total - a[1].total) : []
+    if (subs.length === 0) {
+      subSel.style.display = "none"
+      subSel.innerHTML = ""
+    } else {
+      subSel.style.display = "inline-block"
+      subSel.innerHTML = ""
+      const optAny = document.createElement("option")
+      optAny.value = ""
+      optAny.textContent = "כל התתי-קטגוריות"
+      subSel.appendChild(optAny)
+
+      for (const [sub, si] of subs) {
+        const opt = document.createElement("option")
+        opt.value = sub
+        opt.textContent = `${sub} (${si.total})`
+        subSel.appendChild(opt)
+      }
+      subSel.value = ""
+    }
+  }
+
+  // עדכון chips active
+  document.querySelectorAll(".chip").forEach((b) => {
+    b.classList.toggle("active", b.textContent === selectedCat)
+  })
+
+  if (!skipApply) applySearch()
+}
+
+function onSubCategoryChange() {
+  const subSel = document.getElementById("subcat")
+  selectedSub = subSel && subSel.value ? subSel.value : ""
+  applySearch()
+}
+
+function clearCategory() {
+  document.getElementById("cat").value = ""
+  onCategoryChange()
+}
 
       function scrollToResults() {
         document.getElementById("resultsTitle").scrollIntoView({ behavior: "smooth", block: "start" })
@@ -189,19 +571,20 @@
         return x.replace(/\.[a-z0-9]{2,6}$/i, "")
       }
 
-      async function fetchJsonAny(urls) {
-        let lastErr = null
-        for (const u of urls) {
-          try {
-            const r = await fetch(u, { cache: "no-store" })
-            if (r.ok) return await r.json()
-            lastErr = new Error(`${u} -> HTTP ${r.status}`)
-          } catch (e) {
-            lastErr = e
-          }
-        }
-        throw lastErr || new Error("fetch failed")
-      }
+      async function fetchJsonAny(urls, forceNoStore) {
+  let lastErr = null
+  for (const u of urls) {
+    try {
+      const r = await fetch(u, { cache: forceNoStore ? "no-store" : "force-cache" })
+      if (r.ok) return await r.json()
+      lastErr = new Error(`${u} -> HTTP ${r.status}`)
+    } catch (e) {
+      lastErr = e
+    }
+  }
+  throw lastErr || new Error("fetch failed")
+}
+
 
       function objectToArrayMap(obj) {
         const arr = []
@@ -527,106 +910,215 @@
       }
 
       function applySearch() {
-        const q = document.getElementById("q").value.trim().toLowerCase()
-        const showAll = document.getElementById("showAll").checked
+  if (!Array.isArray(items) || items.length === 0) {
+    clearResults()
+    setStatus("לא נטען")
+    return
+  }
 
-        let base = items
-        if (!showAll) base = base.filter(it => it.path)
+  const q = document.getElementById("q").value.trim().toLowerCase()
+  const showAll = document.getElementById("showAll").checked
 
-        currentList = q ? base.filter(it => it.q.includes(q)) : base
+  const catSel = document.getElementById("cat")
+  const subSel = document.getElementById("subcat")
+  selectedCat = (catSel && catSel.value) ? catSel.value : ""
+  selectedSub = (subSel && subSel.value) ? subSel.value : ""
 
-        clearResults()
-        renderNextPage()
+  let base = items
 
-        const withPath = items.filter(it => it.path).length
-        const withoutPath = items.length - withPath
-        setStatus(`סה"כ: ${items.length} | עם קובץ: ${withPath} | בלי קובץ: ${withoutPath} | מוצג: ${currentList.length}`)
-      }
+  if (!showAll) base = base.filter(it => it.path)
+  if (selectedCat) base = base.filter(it => it.cat === selectedCat)
+  if (selectedSub) base = base.filter(it => it.sub === selectedSub)
 
-      let searchTimer = null
+  currentList = q ? base.filter(it => it.q.includes(q)) : base
+
+  clearResults()
+  renderNextPage()
+
+  const withPath = items.filter(it => it.path).length
+  const withoutPath = items.length - withPath
+
+  const catText = selectedCat ? (selectedSub ? `${selectedCat} › ${selectedSub}` : selectedCat) : "הכל"
+  document.getElementById("catInfo").textContent = `${catText} | מוצג: ${currentList.length}`
+
+  setStatus(`סה"כ: ${items.length} | עם קובץ: ${withPath} | בלי קובץ: ${withoutPath} | מוצג: ${currentList.length}`)
+
+  saveUiStateToSession()
+  updateUrlFromState()
+}
+
+let searchTimer = null = null
       function onSearchInput() {
         clearTimeout(searchTimer)
         searchTimer = setTimeout(applySearch, 150)
       }
 
-      async function loadCatalog() {
-        setStatus("טוען metadata...")
-        document.getElementById("btnLoad").disabled = true
+      async function loadCatalog(opts) {
+  const o = opts && typeof opts === "object" ? opts : {}
+  const force = !!o.force
+  const silent = !!o.silent
 
-        try {
-          const metaJson = await fetchJsonAny([
-            "/api/metadata",
-            "/lib/metadata.json"
-          ])
+  if (!silent) setStatus(force ? "מרענן קטלוג..." : "טוען קטלוג...")
 
-          const rawMetaItems = extractBestCollection(metaJson)
-          if (!rawMetaItems.length) {
-            setStatus("נטען metadata אבל לא זוהתה רשימה")
-            alert("לא הצלחתי לחלץ רשימת פריטים מתוך metadata.json")
-            return
-          }
+  const btn = document.getElementById("btnLoad")
+  btn.disabled = true
 
-          setStatus(`מעבד metadata... (0/${rawMetaItems.length})`)
-          const normalized = []
-          for (let i = 0; i < rawMetaItems.length; i++) {
-            normalized.push(normalizeMetaItem(rawMetaItems[i]))
-            if (i % 3000 === 0) {
-              setStatus(`מעבד metadata... (${i}/${rawMetaItems.length})`)
-              await tick()
-            }
-          }
-          setStatus(`מעבד metadata... (${rawMetaItems.length}/${rawMetaItems.length})`)
+  try {
+    const metaJson = await fetchJsonAny([
+      "/api/metadata",
+      "/lib/metadata.json"
+    ], force)
 
-          setStatus("טוען files_manifest...")
-          const manifestJson = await fetchJsonAny([
-            "/api/manifest",
-            "/lib/files_manifest.json"
-          ])
+    const rawMetaItems = extractBestCollection(metaJson)
+    if (!rawMetaItems.length) {
+      if (!silent) setStatus("נטען metadata אבל לא זוהתה רשימה")
+      alert("לא הצלחתי לחלץ רשימת פריטים מתוך metadata.json")
+      return
+    }
 
-          setStatus("בונה מפות מה־manifest...")
-          const maps = await buildManifestMaps(manifestJson, (done, total) => {
-            setStatus(`בונה מפות מה־manifest... (${done}/${total})`)
-          })
-
-          setStatus(`משלים נתיבים... (0/${normalized.length})`)
-          let filled = 0
-          for (let i = 0; i < normalized.length; i++) {
-            const p = resolvePathForMeta(normalized[i], maps)
-            normalized[i].path = looksLikePath(p) ? String(p).trim() : ""
-            if (normalized[i].path) filled++
-
-            if (i % 1000 === 0) {
-              setStatus(`משלים נתיבים... (${i}/${normalized.length}) | נמצאו: ${filled}`)
-              await tick()
-            }
-          }
-          setStatus(`משלים נתיבים... (${normalized.length}/${normalized.length}) | נמצאו: ${filled}`)
-
-          setStatus("בונה אינדקס חיפוש...")
-          items = await buildIndex(normalized, null)
-
-          document.getElementById("showAll").checked = false
-          applySearch()
-          scrollToResults()
-
-          window.onscroll = () => {
-            if (renderCursor >= currentList.length) return
-            const nearBottom = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 400)
-            if (nearBottom) renderNextPage()
-          }
-        } catch (e) {
-          console.error(e)
-          setStatus("שגיאה")
-          alert("שגיאה: " + (e && e.message ? e.message : e))
-        } finally {
-          document.getElementById("btnLoad").disabled = false
-        }
+    if (!silent) setStatus(`מעבד metadata... (0/${rawMetaItems.length})`)
+    const normalized = []
+    for (let i = 0; i < rawMetaItems.length; i++) {
+      normalized.push(normalizeMetaItem(rawMetaItems[i]))
+      if (!silent && i % 3000 === 0) {
+        setStatus(`מעבד metadata... (${i}/${rawMetaItems.length})`)
+        await tick()
       }
+    }
 
-      async function ping() {
+    if (!silent) setStatus("טוען manifest...")
+    const manifestJson = await fetchJsonAny([
+      "/api/manifest",
+      "/lib/files_manifest.json"
+    ], force)
+
+    if (!silent) setStatus("בונה מפות מה־manifest...")
+    const maps = await buildManifestMaps(manifestJson, (done, total) => {
+      if (!silent) setStatus(`בונה מפות מה־manifest... (${done}/${total})`)
+    })
+
+    if (!silent) setStatus(`משלים נתיבים... (0/${normalized.length})`)
+    let filled = 0
+    for (let i = 0; i < normalized.length; i++) {
+      const p = resolvePathForMeta(normalized[i], maps)
+      normalized[i].path = looksLikePath(p) ? String(p).trim() : ""
+      if (normalized[i].path) filled++
+
+      if (!silent && i % 1000 === 0) {
+        setStatus(`משלים נתיבים... (${i}/${normalized.length}) | נמצאו: ${filled}`)
+        await tick()
+      }
+    }
+    if (!silent) setStatus(`משלים נתיבים... (${normalized.length}/${normalized.length}) | נמצאו: ${filled}`)
+
+    if (!silent) setStatus("בונה אינדקס חיפוש + קטגוריות...")
+    items = await buildIndex(normalized, (done, total) => {
+      if (!silent && done % 2000 === 0) setStatus(`בונה אינדקס... (${done}/${total})`)
+    })
+
+    categoryIndex = buildCategoryIndex(items)
+    renderCategories()
+
+    await cacheWrite(items)
+
+    applySearch()
+
+    if (!silent) setStatus("טעינה הושלמה")
+  } catch (e) {
+    console.error(e)
+    if (!silent) setStatus("שגיאה")
+    alert("שגיאה: " + (e && e.message ? e.message : e))
+  } finally {
+    btn.disabled = false
+  }
+}
+
+
+      
+function applyStateToUi(st) {
+  if (!st) return
+  document.getElementById("q").value = st.q || ""
+  document.getElementById("showAll").checked = !!st.all
+
+  const catSel = document.getElementById("cat")
+  const subSel = document.getElementById("subcat")
+
+  if (st.cat && categoryIndex.has(st.cat)) {
+    catSel.value = st.cat
+    onCategoryChange(true)
+    if (st.sub) {
+      const hasSub = Array.from(subSel.options).some(o => o.value === st.sub)
+      if (hasSub) subSel.value = st.sub
+    }
+  } else {
+    catSel.value = ""
+    onCategoryChange(true)
+  }
+}
+
+async function init() {
+  // מכין select בסיסי כדי שלא יפלו קריאות מוקדמות
+  const catSel = document.getElementById("cat")
+  if (!catSel.options.length) {
+    const opt = document.createElement("option")
+    opt.value = ""
+    opt.textContent = "הכל"
+    catSel.appendChild(opt)
+  }
+
+  const urlSt = getUrlState()
+  const sess = restoreUiStateFromSession()
+
+  const hasUrlFilters = !!(urlSt.q || urlSt.cat || urlSt.sub || urlSt.all)
+  const wantedState = hasUrlFilters ? {
+    q: urlSt.q,
+    cat: urlSt.cat,
+    sub: urlSt.sub,
+    all: urlSt.all
+  } : (urlSt.restore && sess ? sess : null)
+
+  const cached = await cacheRead()
+  if (cached && Array.isArray(cached.items) && cached.items.length) {
+    items = cached.items
+    categoryIndex = buildCategoryIndex(items)
+    renderCategories()
+    applyStateToUi(wantedState)
+    applySearch()
+
+    const stale = (nowMs() - (cached.savedAt || 0)) > CACHE_TTL_MS
+    if (stale) {
+      setStatus("נטען מהמטמון (מרענן ברקע...)")
+      setTimeout(() => loadCatalog({ force: true, silent: true }), 700)
+    } else {
+      setStatus("נטען מהמטמון")
+    }
+  } else {
+    if (wantedState) applyStateToUi(wantedState)
+    await loadCatalog({ force: false, silent: false })
+  }
+
+  window.onscroll = () => {
+    if (renderCursor >= currentList.length) return
+    const nearBottom = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 400)
+    if (nearBottom) renderNextPage()
+  }
+
+  window.addEventListener("beforeunload", () => saveUiStateToSession())
+}
+
+function forceReload() {
+  loadCatalog({ force: true, silent: false })
+}
+async function ping() {
         const r = await fetch("/api/ping")
         alert(await r.text())
       }
+    
+init().catch((e) => {
+  console.error(e)
+  setStatus("שגיאה באתחול")
+})
+
     </script>
   </body>
 </html>
