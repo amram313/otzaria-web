@@ -109,7 +109,7 @@
       .content h2{ font-size: 1.25em; margin: 18px 0 8px 0; }
       .content h3{ font-size: 1.08em; margin: 14px 0 6px 0; }
       .content p { margin: 10px 0; }
-      .content h2, .content h3{ scroll-margin-top: 120px; }
+      .content h1, .content h2, .content h3{ scroll-margin-top: 120px; }
 
       .pre{
         white-space: pre-wrap;
@@ -204,7 +204,17 @@
         font-size: 12px;
         padding: 6px 10px;
       }
+
+      /* PDF export via print */
+      @media print {
+        .topbar, .overlay, .drawer { display: none !important; }
+        body { background: #fff !important; }
+        .page { padding: 0 !important; }
+        .card { border: none !important; }
+      }
     </style>
+
+    <!-- חובה עבור EPUB + DOCX (Client-side) -->
     <script src="/vendor/jszip.min.js"></script>
   </head>
 
@@ -214,6 +224,11 @@
         <button class="btn" onclick="history.back()">חזור</button>
         <button class="btn" id="btnRaw">פתח מקור (RAW)</button>
         <button class="btn" id="btnToc" style="display:none;">תוכן עניינים</button>
+
+        <!-- Export buttons -->
+        <button class="btn" id="btnExportPdf" style="display:none;">ייצוא PDF</button>
+        <button class="btn" id="btnExportDocx" style="display:none;">ייצוא DOCX</button>
+        <button class="btn" id="btnExportEpub" style="display:none;">ייצוא EPUB</button>
 
         <span class="pill" id="fontLabel">גופן: —</span>
         <button class="btn" id="btnMinus" title="הקטן גופן">−</button>
@@ -264,6 +279,11 @@
     </aside>
 
     <script>
+      // ------------ State for export
+      let currentPath = ""
+      let currentSafeHtml = ""
+      let currentPlainText = ""
+
       function encodePath(path){
         return String(path).split("/").filter(Boolean).map(encodeURIComponent).join("/")
       }
@@ -340,6 +360,7 @@
         document.getElementById("drawer").classList.remove("open")
       }
 
+      // ----------- TOC: one list, indentation by H-level (H1..H4)
       function buildNav(){
         const content = document.getElementById("content")
         const nodes = Array.from(content.querySelectorAll("h1, h2, h3, h4"))
@@ -347,18 +368,15 @@
 
         if (nodes.length === 0) return { items: [], steps: [] }
 
-        // נותנים id לכל כותרת כדי שנוכל לקפוץ אליה
         const items = nodes.map((n, idx) => {
-          const level = Number(String(n.tagName).slice(1)) // H1 -> 1 וכו'
+          const level = Number(String(n.tagName).slice(1))
           if (!n.id) n.id = "h" + level + "-" + idx + "-" + slug(textOf(n))
           return { id: n.id, label: textOf(n), level }
         })
 
-        // הפעלה של כפתור תוכן עניינים + למעלה
         document.getElementById("btnToc").style.display = "inline-block"
         document.getElementById("btnTop").style.display = "inline-block"
 
-        // Prev/Next: נעדיף לדפדף לפי H3 (אם יש), אחרת H2, אחרת כל הכותרות
         const steps =
           items.filter(x => x.level === 3).length > 1 ? items.filter(x => x.level === 3) :
           items.filter(x => x.level === 2).length > 1 ? items.filter(x => x.level === 2) :
@@ -377,7 +395,6 @@
 
         document.getElementById("btnTop").onclick = () => window.scrollTo({ top: 0, behavior: "smooth" })
 
-        // Drawer TOC (רשימה אחת עם הזחות לפי רמה)
         const tocList = document.getElementById("tocList")
         const tocHint = document.getElementById("tocHint")
         tocList.innerHTML = ""
@@ -394,11 +411,9 @@
           a.href = "#" + it.id
           a.textContent = it.label
 
-          // הזחה לפי רמה: H1=0px, H2=14px, H3=28px, H4=42px
           const indent = (Math.max(1, it.level) - 1) * 14
           a.style.paddingRight = (10 + indent) + "px"
 
-          // קצת “הדגשה” לרמות עליונות
           if (it.level === 1) a.style.fontWeight = "700"
           if (it.level >= 3) a.style.color = "#444"
 
@@ -411,7 +426,6 @@
           tocList.appendChild(a)
         })
 
-        // עדכון “נוכחי” לדפדוף (לפי steps)
         let currentI = -1
 
         function setCurrentByScroll(){
@@ -449,7 +463,351 @@
         return { items, steps }
       }
 
+      // ==========================
+      // Export helpers (PDF/DOCX/EPUB)
+      // ==========================
+      function requireJSZip() {
+        if (!window.JSZip) {
+          alert("חסר JSZip. ודא ש-/vendor/jszip.min.js נטען תקין.")
+          return false
+        }
+        return true
+      }
 
+      function xmlEscape(s) {
+        return String(s || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll("\"", "&quot;")
+          .replaceAll("'", "&apos;")
+      }
+
+      function downloadBlob(blob, filename) {
+        const a = document.createElement("a")
+        const url = URL.createObjectURL(blob)
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1500)
+      }
+
+      function baseNameFromPath(p) {
+        const s = String(p || "").replaceAll("\\", "/")
+        const parts = s.split("/")
+        return (parts[parts.length - 1] || "book").trim()
+      }
+
+      function fileStem(name) {
+        return String(name || "book").replace(/\.[a-z0-9]{2,6}$/i, "") || "book"
+      }
+
+      function getTitleFromContent() {
+        const h1 = document.querySelector("#content h1")
+        const t = h1 ? (h1.textContent || "").trim() : ""
+        return t || "ספר"
+      }
+
+      function exportPdfPrint() {
+        // המשתמש בוחר "Save as PDF" בדיאלוג ההדפסה
+        window.print()
+      }
+
+      function htmlToDocxBlocks() {
+        const root = document.getElementById("content")
+        if (!root) return []
+
+        const blocks = []
+        const els = root.querySelectorAll("h1,h2,h3,h4,p,li,blockquote")
+        if (els.length) {
+          els.forEach((el) => {
+            const tag = el.tagName.toLowerCase()
+            const text = (el.textContent || "").replace(/\s+/g, " ").trim()
+            if (!text) return
+            blocks.push({ tag, text })
+          })
+          return blocks
+        }
+
+        const text = (root.textContent || "").split("\n")
+        text.forEach((line) => {
+          const t = String(line || "").trim()
+          if (t) blocks.push({ tag: "p", text: t })
+        })
+        return blocks
+      }
+
+      function docxParaXml(text, kind) {
+        // kind: "h1","h2","h3","h4","p"
+        const sizeMap = {
+          h1: 48, // 24pt
+          h2: 40, // 20pt
+          h3: 34, // 17pt
+          h4: 30, // 15pt
+          p: 26   // 13pt
+        }
+        const sz = sizeMap[kind] || sizeMap.p
+
+        // bidi + align right
+        const pPr =
+          "<w:pPr>" +
+            "<w:jc w:val=\"right\"/>" +
+            "<w:bidi/>" +
+            (kind !== "p" ? "<w:spacing w:before=\"240\" w:after=\"120\"/>" : "<w:spacing w:after=\"120\"/>") +
+          "</w:pPr>"
+
+        const rPr =
+          "<w:rPr>" +
+            "<w:rtl/>" +
+            "<w:sz w:val=\"" + sz + "\"/>" +
+            "<w:szCs w:val=\"" + sz + "\"/>" +
+            (kind !== "p" ? "<w:b/>" : "") +
+          "</w:rPr>"
+
+        return (
+          "<w:p>" +
+            pPr +
+            "<w:r>" +
+              rPr +
+              "<w:t xml:space=\"preserve\">" + xmlEscape(text) + "</w:t>" +
+            "</w:r>" +
+          "</w:p>"
+        )
+      }
+
+      async function exportDocx() {
+        if (!requireJSZip()) return
+
+        const title = getTitleFromContent()
+        const outName = fileStem(baseNameFromPath(currentPath)) + ".docx"
+
+        const blocks = htmlToDocxBlocks()
+        const bodyXml = blocks.map((b) => {
+          const kind = (b.tag === "h1" || b.tag === "h2" || b.tag === "h3" || b.tag === "h4") ? b.tag : "p"
+          return docxParaXml(b.text, kind)
+        }).join("")
+
+        const documentXml =
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    ${bodyXml}
+    <w:sectPr/>
+  </w:body>
+</w:document>`
+
+        const contentTypesXml =
+`<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`
+
+        const relsXml =
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`
+
+        const nowIso = new Date().toISOString()
+
+        const coreXml =
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+  xmlns:dc="http://purl.org/dc/elements/1.1/"
+  xmlns:dcterms="http://purl.org/dc/terms/"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>${xmlEscape(title)}</dc:title>
+  <dc:language>he-IL</dc:language>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${nowIso}</dcterms:created>
+</cp:coreProperties>`
+
+        const appXml =
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
+  xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>otzaria-web</Application>
+</Properties>`
+
+        const zip = new JSZip()
+        zip.file("[Content_Types].xml", contentTypesXml)
+        zip.folder("_rels").file(".rels", relsXml)
+        zip.folder("word").file("document.xml", documentXml)
+        zip.folder("docProps").file("core.xml", coreXml)
+        zip.folder("docProps").file("app.xml", appXml)
+
+        const blob = await zip.generateAsync({
+          type: "blob",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        })
+
+        downloadBlob(blob, outName)
+      }
+
+      function ensureHeadingIds(html) {
+        const doc = new DOMParser().parseFromString(html, "text/html")
+        const headings = doc.querySelectorAll("h1,h2,h3,h4")
+        headings.forEach((h, i) => {
+          if (!h.id) h.id = "h-" + i
+        })
+        return { doc, headings }
+      }
+
+      async function exportEpub() {
+        if (!requireJSZip()) return
+
+        const title = getTitleFromContent()
+        const outName = fileStem(baseNameFromPath(currentPath)) + ".epub"
+
+        let html = currentSafeHtml
+        if (!html) {
+          // fallback: אם זה טקסט "pre"
+          const escaped = xmlEscape(currentPlainText || "")
+          html = "<h1>" + xmlEscape(title) + "</h1><pre>" + escaped + "</pre>"
+        }
+
+        const { doc, headings } = ensureHeadingIds(html)
+        const xhtmlBody = doc.body.innerHTML
+
+        const xhtml =
+`<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="he" lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8"/>
+    <title>${xmlEscape(title)}</title>
+    <link rel="stylesheet" type="text/css" href="style.css"/>
+  </head>
+  <body>
+    ${xhtmlBody}
+  </body>
+</html>`
+
+        const tocItems = Array.from(headings).slice(0, 800).map((h) => {
+          const lvl = Number(String(h.tagName).slice(1))
+          const txt = (h.textContent || "").trim() || "כותרת"
+          const indent = (Math.max(1, lvl) - 1) * 12
+          return `<li style="margin-right:${indent}px"><a href="content.xhtml#${xmlEscape(h.id)}">${xmlEscape(txt)}</a></li>`
+        }).join("")
+
+        const navXhtml =
+`<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="he" lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8"/>
+    <title>תוכן עניינים</title>
+  </head>
+  <body>
+    <nav epub:type="toc" id="toc" role="doc-toc" xmlns:epub="http://www.idpf.org/2007/ops">
+      <h1>תוכן עניינים</h1>
+      <ol>
+        ${tocItems}
+      </ol>
+    </nav>
+  </body>
+</html>`
+
+        const css =
+`body{
+  font-family: sans-serif;
+  direction: rtl;
+  line-height: 1.85;
+  font-size: 1em;
+}
+h1{ font-size: 1.6em; margin: 0 0 0.6em 0; }
+h2{ font-size: 1.3em; margin: 1.2em 0 0.5em 0; }
+h3{ font-size: 1.15em; margin: 1.0em 0 0.4em 0; }
+pre{ white-space: pre-wrap; }`
+
+        const uid = "uid-" + Math.random().toString(16).slice(2)
+
+        const opf =
+`<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0" xml:lang="he">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="BookId">${uid}</dc:identifier>
+    <dc:title>${xmlEscape(title)}</dc:title>
+    <dc:language>he</dc:language>
+  </metadata>
+  <manifest>
+    <item id="content" href="content.xhtml" media-type="application/xhtml+xml"/>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="css" href="style.css" media-type="text/css"/>
+  </manifest>
+  <spine>
+    <itemref idref="content"/>
+  </spine>
+</package>`
+
+        const containerXml =
+`<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`
+
+        const zip = new JSZip()
+        zip.file("mimetype", "application/epub+zip", { compression: "STORE" })
+        zip.folder("META-INF").file("container.xml", containerXml)
+
+        const oebps = zip.folder("OEBPS")
+        oebps.file("content.xhtml", xhtml)
+        oebps.file("nav.xhtml", navXhtml)
+        oebps.file("style.css", css)
+        oebps.file("content.opf", opf)
+
+        const blob = await zip.generateAsync({
+          type: "blob",
+          mimeType: "application/epub+zip"
+        })
+
+        downloadBlob(blob, outName)
+      }
+
+      function showExportButtonsForHtml() {
+        const btnPdf = document.getElementById("btnExportPdf")
+        const btnDocx = document.getElementById("btnExportDocx")
+        const btnEpub = document.getElementById("btnExportEpub")
+
+        btnPdf.style.display = "inline-block"
+        btnPdf.textContent = "ייצוא PDF"
+        btnPdf.onclick = () => exportPdfPrint()
+
+        btnDocx.style.display = "inline-block"
+        btnDocx.onclick = () => exportDocx()
+
+        btnEpub.style.display = "inline-block"
+        btnEpub.onclick = () => exportEpub()
+      }
+
+      function showExportButtonsForPdf() {
+        const btnPdf = document.getElementById("btnExportPdf")
+        const btnDocx = document.getElementById("btnExportDocx")
+        const btnEpub = document.getElementById("btnExportEpub")
+
+        btnPdf.style.display = "inline-block"
+        btnPdf.textContent = "הורד PDF"
+        btnPdf.onclick = () => {
+          const u = "/lib/" + encodePath(currentPath)
+          window.open(u, "_blank", "noopener,noreferrer")
+        }
+
+        btnDocx.style.display = "none"
+        btnEpub.style.display = "none"
+      }
+
+      // ==========================
+      // main
+      // ==========================
       async function main(){
         const prefs = loadPrefs()
         applyPrefs(prefs)
@@ -493,6 +851,10 @@
           return
         }
 
+        currentPath = path
+        currentSafeHtml = ""
+        currentPlainText = ""
+
         meta.textContent = "path: " + path
 
         btnRaw.onclick = () => {
@@ -504,6 +866,7 @@
           loading.style.display = "none"
           pdf.style.display = "block"
           pdf.src = "/lib/" + encodePath(path)
+          showExportButtonsForPdf()
           return
         }
 
@@ -524,14 +887,20 @@
           if (safe && safe.trim().length > 10){
             content.style.display = "block"
             content.innerHTML = safe
+            currentSafeHtml = safe
+            showExportButtonsForHtml()
             buildNav()
           } else {
             pre.style.display = "block"
             pre.textContent = text
+            currentPlainText = text
+            showExportButtonsForHtml()
           }
         } else {
           pre.style.display = "block"
           pre.textContent = text
+          currentPlainText = text
+          showExportButtonsForHtml()
         }
       }
 
