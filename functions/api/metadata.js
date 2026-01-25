@@ -4,9 +4,9 @@ export async function onRequest(context) {
 
   const BRANCH = "main"
   const upstreamUrl =
-    `https://raw.githubusercontent.com/amram313/otzaria-library/refs/heads/${BRANCH}/metadata.json`
+    `https://raw.githubusercontent.com/Otzaria/otzaria-library/refs/heads/${BRANCH}/metadata.json`
 
-  const cacheKey = new Request(url.toString(), request)
+  const cacheKey = new Request(url.toString() + (url.search ? "&" : "?") + "up=" + encodeURIComponent(upstreamUrl), request)
 
   const cached = await caches.default.match(cacheKey)
   if (cached) return cached
