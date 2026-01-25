@@ -239,9 +239,16 @@
         <button class="btnSmall" onclick="ping()">בדיקה: /api/ping</button>
 
         <label class="pill">
-          <input id="showAll" type="checkbox" onchange="applySearch()" />
-          הצג גם פריטים בלי קובץ
+          מצב תצוגה:
+          <select id="fileMode" onchange="applySearch()">
+            <option value="with" selected>רק עם קובץ</option>
+            <option value="without">רק בלי קובץ</option>
+            <option value="all">הכל</option>
+          </select>
         </label>
+
+        <button class="btnSmall" onclick="clearQuery()">נקה חיפוש</button>
+        <button class="btnSmall" onclick="downloadMissing()">הורד רשימת חסרים</button>
 
         <label class="pill">
           <input id="searchAllCats" type="checkbox" onchange="applySearch()" checked />
@@ -648,36 +655,6 @@
         return x.replace(/\.[a-z0-9]{2,6}$/i, "")
       }
 
-
-function normalizeNameKey(s) {
-  let x = String(s || "").trim()
-  if (!x) return ""
-  // Decode URL-encoded forms (e.g. %22) when present
-  try {
-    if (/%[0-9A-Fa-f]{2}/.test(x)) x = decodeURIComponent(x)
-  } catch (e) {}
-  // Common HTML entities for quotes
-  x = x.replaceAll("&quot;", '"').replaceAll("&#34;", '"')
-  // Normalize Unicode (helps with Hebrew punctuation variants)
-  try { x = x.normalize("NFKC") } catch (e) {}
-  // Unify Hebrew gershayim/geresh and smart quotes
-  x = x
-    .replace(/[״“”″]/g, '"')
-    .replace(/[׳‘’]/g, "'")
-  // Remove quotes/apostrophes for matching
-  x = x.replace(/["']/g, "")
-  // Collapse whitespace
-  x = x.replace(/\s+/g, " ").trim()
-  return x.toLowerCase()
-}
-
-function addToMapVariants(map, key, value) {
-  const k = String(key || "").trim()
-  if (k && !map.has(k)) map.set(k, value)
-  const nk = normalizeNameKey(k)
-  if (nk && !map.has(nk)) map.set(nk, value)
-}
-
       function collectStringsFromValue(val) {
         const out = []
         const push = (v) => {
@@ -716,6 +693,14 @@ function addToMapVariants(map, key, value) {
         const hashToPath = new Map()
         const baseToPath = new Map()
         const stemToPath = new Map()
+        const baseNormToPath = new Map()
+        const stemNormToPath = new Map()
+
+        const putUnique = (map, key, path) => {
+          if (!key) return
+          if (!map.has(key)) map.set(key, path)
+          else if (map.get(key) !== path) map.set(key, "")
+        }
         const entries = extractManifestEntries(manifestJson)
         const total = entries.length
 
@@ -735,8 +720,10 @@ function addToMapVariants(map, key, value) {
           if (path) {
             const b = basenameOf(path).toLowerCase()
             const st = stemOfFilename(b).toLowerCase()
-            addToMapVariants(baseToPath, b, path)
-            addToMapVariants(stemToPath, st, path)
+            if (b && !baseToPath.has(b)) baseToPath.set(b, path)
+            if (st && !stemToPath.has(st)) stemToPath.set(st, path)
+            putUnique(baseNormToPath, normalizeKey(b), path)
+            putUnique(stemNormToPath, normalizeKey(st), path)
 
             if (looksLikeHashish(kStr)) {
               const hk = normHashish(kStr)
@@ -749,8 +736,10 @@ function addToMapVariants(map, key, value) {
               }
               const bb = basenameOf(s).toLowerCase()
               const sst = stemOfFilename(bb).toLowerCase()
-              addToMapVariants(baseToPath, bb, path)
-              addToMapVariants(stemToPath, sst, path)
+              if (bb && !baseToPath.has(bb)) baseToPath.set(bb, path)
+              if (sst && !stemToPath.has(sst)) stemToPath.set(sst, path)
+              putUnique(baseNormToPath, normalizeKey(bb), path)
+              putUnique(stemNormToPath, normalizeKey(sst), path)
             }
           }
 
@@ -761,39 +750,60 @@ function addToMapVariants(map, key, value) {
         }
 
         if (onProgress) onProgress(total, total)
-        return { hashToPath, baseToPath, stemToPath }
+        return { hashToPath, baseToPath, stemToPath, baseNormToPath, stemNormToPath }
       }
 
-      
-function pathFromItemUsingMaps(item, maps) {
-  if (looksLikePath(item.path)) return item.path
+      function pathFromItemUsingMaps(item, maps) {
+        if (looksLikePath(item.path)) return item.path
 
-  const strings = deepCollectStrings(item._raw, 5, 220)
+        const strings = deepCollectStrings(item._raw, 5, 220)
 
-  for (const s of strings) {
-    if (!looksLikeHashish(s)) continue
-    const h = normHashish(s)
-    if (h && maps.hashToPath.has(h)) return maps.hashToPath.get(h)
-  }
+        for (const s of strings) {
+          if (!looksLikeHashish(s)) continue
+          const h = normHashish(s)
+          if (h && maps.hashToPath.has(h)) return maps.hashToPath.get(h)
+        }
 
-  for (const s of strings) {
-    const bRaw = basenameOf(s).toLowerCase()
-    const bNorm = normalizeNameKey(bRaw)
-    if (bRaw && maps.baseToPath.has(bRaw)) return maps.baseToPath.get(bRaw)
-    if (bNorm && maps.baseToPath.has(bNorm)) return maps.baseToPath.get(bNorm)
-  }
+        for (const s of strings) {
+          const b = basenameOf(s).toLowerCase()
+          if (b && maps.baseToPath.has(b)) return maps.baseToPath.get(b)
+        }
 
-  for (const s of strings) {
-    const bRaw = basenameOf(s).toLowerCase()
-    const stRaw = stemOfFilename(bRaw).toLowerCase()
-    const stNorm = normalizeNameKey(stRaw)
-    if (stRaw && maps.stemToPath.has(stRaw)) return maps.stemToPath.get(stRaw)
-    if (stNorm && maps.stemToPath.has(stNorm)) return maps.stemToPath.get(stNorm)
-  }
+        for (const s of strings) {
+          const b = basenameOf(s).toLowerCase()
+          const st = stemOfFilename(b).toLowerCase()
+          if (st && maps.stemToPath.has(st)) return maps.stemToPath.get(st)
+        }
 
-  return ""
-}
+        // התאמה רופפת: מתעלמים ממרכאות/פיסוק/קידודים שונים (רק אם חד-משמעי ב־manifest)
+        for (const s of strings) {
+          const b0 = basenameOf(s)
+          const nb = normalizeKey(b0)
+          if (nb && maps.baseNormToPath && maps.baseNormToPath.has(nb)) {
+            const p = maps.baseNormToPath.get(nb)
+            if (p) return p
+          }
+        }
 
+        for (const s of strings) {
+          const b0 = basenameOf(s)
+          const st0 = stemOfFilename(b0)
+          const ns = normalizeKey(st0)
+          if (ns && maps.stemNormToPath && maps.stemNormToPath.has(ns)) {
+            const p = maps.stemNormToPath.get(ns)
+            if (p) return p
+          }
+        }
+
+        // ניסיון אחרון: התאמה לפי כותרת (רק אם חד-משמעי)
+        const nt = normalizeKey(item.title || "")
+        if (nt && maps.stemNormToPath && maps.stemNormToPath.has(nt)) {
+          const p = maps.stemNormToPath.get(nt)
+          if (p) return p
+        }
+
+        return ""
+      }
 
       function normForSearch(s) {
         return String(s ?? "")
@@ -1120,13 +1130,73 @@ if (i % 3000 === 0) {
         return true
       }
 
-      function applySearch() {
+      
+      function clearQuery() {
+        const el = document.getElementById("q")
+        if (el) el.value = ""
+        applySearch()
+      }
+
+      function downloadMissing() {
+        const missing = items
+          .filter(it => !it.path)
+          .map(it => {
+            const strings = deepCollectStrings(it._raw, 6, 140)
+            const hints = []
+            for (const s of strings) {
+              const x = String(s || "")
+              if (!x) continue
+              if (looksLikePath(x) || looksLikeHashish(x) || /\.(pdf|docx|epub|txt|zip|json)$/i.test(x) || /%22|["״׳'`´“”‘’]/.test(x)) {
+                hints.push(x)
+              }
+            }
+            return {
+              title: it.title || "",
+              author: it.author || "",
+              id: it.id || "",
+              key: it._key || "",
+              hints: hints.slice(0, 30)
+            }
+          })
+
+        const payload = {
+          generatedAt: new Date().toISOString(),
+          total: missing.length,
+          items: missing
+        }
+
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" })
+        const a = document.createElement("a")
+        a.href = URL.createObjectURL(blob)
+        a.download = "missing_no_file.json"
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+      }
+
+      // נרמול שמות לצורך התאמות "רופפות" (פיסוק/מרכאות/קידודים שונים)
+      function normalizeKey(s) {
+        let x = safeDecodeURIComponent(String(s ?? ""))
+        try { x = x.normalize("NFKD") } catch (e) {}
+        x = x
+          .replace(/%22/gi, '"')
+          .replace(/["״׳'`´“”‘’]/g, "")
+          .replace(/[^\p{L}\p{N}]+/gu, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase()
+        return x
+      }
+
+function applySearch() {
         const q = document.getElementById("q").value.trim().toLowerCase()
-        const showAll = document.getElementById("showAll").checked
+        const fileMode = document.getElementById("fileMode").value
         const searchAllCats = document.getElementById("searchAllCats").checked
 
         let base = items
-        if (!showAll) base = base.filter(it => it.path)
+        if (fileMode === "with") base = base.filter(it => it.path)
+        else if (fileMode === "without") base = base.filter(it => !it.path)
 
         let scoped = base
         // כשיש קטגוריה נבחרת:
@@ -1143,17 +1213,18 @@ if (i % 3000 === 0) {
 
         clearResults()
         renderNextPage()
-        updateHeaderStats(q, showAll, searchAllCats)
+        updateHeaderStats(q, fileMode, searchAllCats)
       }
 
-      function updateHeaderStats(q, showAll, searchAllCats) {
+      function updateHeaderStats(q, fileMode, searchAllCats) {
         const withPath = items.filter(it => it.path).length
         const withoutPath = items.length - withPath
+        const modeLabel = (fileMode === "with") ? "רק עם קובץ" : (fileMode === "without") ? "רק בלי קובץ" : "הכל"
         const catLabel = selectedCategorySegs && selectedCategorySegs.length ? selectedCategorySegs.join(" / ") : "הכל"
         const scope = (q && searchAllCats) ? "כל הקטגוריות" : catLabel
 
         document.getElementById("scopeHint").textContent =
-          `תחום: ${scope} | מוצג: ${currentList.length} | סה"כ: ${items.length} | עם קובץ: ${withPath} | בלי קובץ: ${withoutPath}`
+          `תחום: ${scope} | מצב: ${modeLabel} | מוצג: ${currentList.length} | סה"כ: ${items.length} | עם קובץ: ${withPath} | בלי קובץ: ${withoutPath}`
 
         document.getElementById("resultsTitle").textContent =
           q ? `תוצאות חיפוש (${currentList.length})` : `תוצאות (${currentList.length})`
