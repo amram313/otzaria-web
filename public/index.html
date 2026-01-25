@@ -307,6 +307,7 @@
       // State
       // =========================
       let items = []
+      let lastMaps = null
       let currentList = []
       let renderCursor = 0
       const PAGE_SIZE = 60
@@ -348,14 +349,19 @@
       }
 
       function encodePath(path) {
-        return String(path)
+        return String(path ?? "")
           .split("/")
           .filter(Boolean)
-          .map(encodeURIComponent)
+          .map((seg) => encodePreservePct(seg, encodeURIComponentStrict))
           .join("/")
       }
 
-      function libUrl(pathOrUrl) {
+      function encodeQueryValue(v) {
+        // ב-query רצוי לקודד גם /, ולכן משתמשים ב-encodeURIComponentStrict על כל המחרוזת
+        return encodePreservePct(String(v ?? ""), encodeURIComponentStrict)
+      }
+
+function libUrl(pathOrUrl) {
         const v = String(pathOrUrl || "").trim()
         if (!v) return ""
         if (v.startsWith("http://") || v.startsWith("https://")) return v
@@ -371,7 +377,7 @@
       function openInNewTab(path) {
         const p = String(path || "").trim()
         if (!p) return
-        const viewer = "/view?path=" + encodeURIComponent(p)
+        const viewer = "/view?path=" + encodeQueryValue(p)
         refreshLink(viewer)
         window.open(viewer, "_blank", "noopener,noreferrer")
       }
@@ -380,7 +386,7 @@
         const p = String(path || "").trim()
         if (!p) return
         lastViewerPath = p
-        const viewerUrl = "/view?path=" + encodeURIComponent(p)
+        const viewerUrl = "/view?path=" + encodeQueryValue(p)
         refreshLink(viewerUrl)
         showViewer(viewerUrl)
       }
@@ -695,12 +701,24 @@
         const stemToPath = new Map()
         const baseNormToPath = new Map()
         const stemNormToPath = new Map()
+        const baseNormToPaths = new Map()
+        const stemNormToPaths = new Map()
 
         const putUnique = (map, key, path) => {
           if (!key) return
           if (!map.has(key)) map.set(key, path)
           else if (map.get(key) !== path) map.set(key, "")
         }
+        const addMulti = (map, key, path) => {
+          if (!key) return
+          if (!map.has(key)) map.set(key, [])
+          const arr = map.get(key)
+          if (!Array.isArray(arr)) return
+          if (arr.includes(path)) return
+          // לא לאגור יותר מדי (מספיק לאבחון)
+          if (arr.length < 12) arr.push(path)
+        }
+
         const entries = extractManifestEntries(manifestJson)
         const total = entries.length
 
@@ -723,7 +741,9 @@
             if (b && !baseToPath.has(b)) baseToPath.set(b, path)
             if (st && !stemToPath.has(st)) stemToPath.set(st, path)
             putUnique(baseNormToPath, normalizeKey(b), path)
+              addMulti(baseNormToPaths, normalizeKey(b), path)
             putUnique(stemNormToPath, normalizeKey(st), path)
+              addMulti(stemNormToPaths, normalizeKey(st), path)
 
             if (looksLikeHashish(kStr)) {
               const hk = normHashish(kStr)
@@ -739,7 +759,9 @@
               if (bb && !baseToPath.has(bb)) baseToPath.set(bb, path)
               if (sst && !stemToPath.has(sst)) stemToPath.set(sst, path)
               putUnique(baseNormToPath, normalizeKey(bb), path)
+              addMulti(baseNormToPaths, normalizeKey(bb), path)
               putUnique(stemNormToPath, normalizeKey(sst), path)
+              addMulti(stemNormToPaths, normalizeKey(sst), path)
             }
           }
 
@@ -750,7 +772,7 @@
         }
 
         if (onProgress) onProgress(total, total)
-        return { hashToPath, baseToPath, stemToPath, baseNormToPath, stemNormToPath }
+        return { hashToPath, baseToPath, stemToPath, baseNormToPath, stemNormToPath, baseNormToPaths, stemNormToPaths }
       }
 
       function pathFromItemUsingMaps(item, maps) {
@@ -900,6 +922,7 @@
           const maps = await buildManifestMaps(manifestJson, (done, total) => {
             setStatus(`בונה מפות מה־manifest... (${done}/${total})`)
           })
+          lastMaps = maps
 
           setStatus("מצמיד נתיבים (path) לפי ה־manifest...")
           let fixed = 0
@@ -1155,7 +1178,27 @@ if (i % 3000 === 0) {
               author: it.author || "",
               id: it.id || "",
               key: it._key || "",
-              hints: hints.slice(0, 30)
+              // עוזר לזהות: גם הכותרת/מחבר + רמזים "חשודים"
+              hints: [it.title || "", it.author || "", ...hints].filter(Boolean).slice(0, 60),
+              normTitle: normalizeKey(it.title || ""),
+              candidates: (() => {
+                const nt = normalizeKey(it.title || "")
+                if (!nt || !lastMaps) return []
+                const a = (lastMaps.stemNormToPaths && lastMaps.stemNormToPaths.get(nt)) || []
+                // אם אין כלום לפי stem, ננסה לפי baseNorm (לעיתים metadata מכיל שם קובץ)
+                const b = (a.length ? a : (lastMaps.baseNormToPaths && lastMaps.baseNormToPaths.get(nt)) || [])
+                return Array.isArray(b) ? b.slice(0, 20) : []
+              })(),
+              reason: (() => {
+                const nt = normalizeKey(it.title || "")
+                if (!nt || !lastMaps) return "no_maps"
+                const a = (lastMaps.stemNormToPaths && lastMaps.stemNormToPaths.get(nt)) || []
+                const b = (a.length ? a : (lastMaps.baseNormToPaths && lastMaps.baseNormToPaths.get(nt)) || [])
+                const n = Array.isArray(b) ? b.length : 0
+                if (n === 0) return "no_match"
+                if (n === 1) return "single_suggestion"
+                return "ambiguous"
+              })()
             }
           })
 
@@ -1176,7 +1219,41 @@ if (i % 3000 === 0) {
       }
 
       // נרמול שמות לצורך התאמות "רופפות" (פיסוק/מרכאות/קידודים שונים)
-      function normalizeKey(s) {
+            // decodeURIComponent אך לא קורס על מחרוזות "מלוכלכות" (למשל % לא תקין)
+      function safeDecodeURIComponent(s) {
+        const x = String(s ?? "")
+        try {
+          return decodeURIComponent(x)
+        } catch (e) {
+          // אם יש % לא תקין – ננסה קודם לאלף אותו ואז לפענח
+          try {
+            const fixed = x.replace(/%(?![0-9A-Fa-f]{2})/g, "%25")
+            return decodeURIComponent(fixed)
+          } catch (e2) {
+            return x
+          }
+        }
+      }
+
+      // קידוד URL "קשיח" שגם מקודד תווים ש-encodeURIComponent לעיתים משאיר (כמו ')
+      function encodeURIComponentStrict(s) {
+        return encodeURIComponent(String(s))
+          .replace(/'/g, "%27")
+          .replace(/\(/g, "%28")
+          .replace(/\)/g, "%29")
+          .replace(/\*/g, "%2A")
+      }
+
+      // מקודד רכיב אך שומר על %XX קיימים (מונע double-encode ל-%25)
+      function encodePreservePct(s, encoder) {
+        const x = String(s ?? "")
+        // מחליף כל %XX בטוקן שלא יקודד, ואז מחזיר
+        const tokenized = x.replace(/%([0-9A-Fa-f]{2})/g, "~P$1~")
+        const enc = encoder(tokenized)
+        return enc.replace(/~P([0-9A-Fa-f]{2})~/g, "%$1")
+      }
+
+function normalizeKey(s) {
         let x = safeDecodeURIComponent(String(s ?? ""))
         try { x = x.normalize("NFKD") } catch (e) {}
         x = x
