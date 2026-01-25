@@ -1,70 +1,54 @@
-function safeDecode(s) {
-  try {
-    return decodeURIComponent(String(s))
-  } catch (e) {
-    return String(s)
-  }
-}
-
-function encodePathSegments(segments) {
-  // מנקה קידוד כפול:
-  // אם מגיע "%D7%90..." -> נהפוך ל-"א..." ואז נקודד פעם אחת נכון.
-  return segments
-    .map((s) => safeDecode(s))
-    .map((s) => encodeURIComponent(String(s)))
-    .join("/")
-}
-
 export async function onRequest(context) {
-  const { request, params } = context
-
-  const segs = Array.isArray(params.path) ? params.path : [params.path].filter(Boolean)
-
-  if (segs.length === 0) {
-    return new Response("Missing path", { status: 400 })
-  }
-
-  if (segs.some((s) => String(s).includes(".."))) {
-    return new Response("Bad path", { status: 400 })
-  }
+  const { request } = context
+  const url = new URL(request.url)
 
   const BRANCH = "main"
-  const upstreamBase =
-    `https://raw.githubusercontent.com/amram313/otzaria-library/refs/heads/${BRANCH}/`
 
-  const relPath = encodePathSegments(segs)
-  const upstreamUrl = upstreamBase + relPath
-
-  // תומך Range (חשוב ל-PDF). אם יש Range – לא מקשיחים cache.
-  const hasRange = request.headers.has("range")
-  const cacheKey = new Request(new URL(request.url).toString(), request)
-
-  if (!hasRange) {
-    const cached = await caches.default.match(cacheKey)
-    if (cached) return cached
+  // Preserve any existing percent-encoding in the path to avoid double-encoding
+  // and to support filenames that contain quotes and other special characters.
+  // Route: /lib or /lib/<anything...>
+  const pathname = url.pathname || ""
+  if (pathname === "/lib" || pathname === "/lib/") {
+    return new Response("Missing file path", { status: 400 })
   }
 
-  const upstreamResp = await fetch(upstreamUrl, {
-    method: "GET",
-    headers: hasRange ? { range: request.headers.get("range") } : {}
+  let rel = pathname.replace(/^\/lib\/?/, "")
+  // Basic hardening
+  if (!rel || rel.startsWith("/")) return new Response("Bad path", { status: 400 })
+
+  const safeDecode = (s) => {
+    try { return decodeURIComponent(s) } catch (_) { return s }
+  }
+
+  // Prevent traversal after decoding
+  const decodedForCheck = rel.split("/").map(safeDecode).join("/")
+  if (decodedForCheck.includes("..")) return new Response("Bad path", { status: 400 })
+
+  const upstreamUrl =
+    `https://raw.githubusercontent.com/Otzaria/otzaria-library/refs/heads/${BRANCH}/lib/${rel}`
+
+  const cacheKey = new Request(
+    url.toString() + (url.search ? "&" : "?") + "up=" + encodeURIComponent(upstreamUrl),
+    request
+  )
+
+  const cached = await caches.default.match(cacheKey)
+  if (cached) return cached
+
+  // Forward method + headers for range/caching friendliness
+  const r = await fetch(upstreamUrl, {
+    method: request.method === "HEAD" ? "GET" : request.method,
+    headers: request.headers,
   })
 
-  if (!upstreamResp.ok) {
-    // מחזיר גם את הכתובת שאליה ניסינו לגשת כדי שתראה מה נשבר
-    const msg =
-      `Upstream error: ${upstreamResp.status}\n` +
-      `Upstream URL: ${upstreamUrl}\n` +
-      `Rel path: ${relPath}\n`
-    return new Response(msg, { status: 502 })
+  if (!r.ok) {
+    return new Response(`Upstream error: ${r.status}`, { status: 502 })
   }
 
-  const resp = new Response(upstreamResp.body, upstreamResp)
+  const resp = new Response(r.body, r)
   resp.headers.set("Access-Control-Allow-Origin", "*")
-  resp.headers.set("Cache-Control", hasRange ? "no-store" : "public, max-age=86400")
+  resp.headers.set("Cache-Control", "public, max-age=31536000, immutable")
 
-  if (!hasRange) {
-    context.waitUntil(caches.default.put(cacheKey, resp.clone()))
-  }
-
+  context.waitUntil(caches.default.put(cacheKey, resp.clone()))
   return resp
 }
