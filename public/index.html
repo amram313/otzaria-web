@@ -1008,10 +1008,28 @@ if (i % 3000 === 0) {
         const x = String(p || "").trim()
         if (!x) return []
         if (x.startsWith("http://") || x.startsWith("https://")) return []
-        const parts = x.replaceAll("\\", "/").split("/").filter(Boolean)
+
+        // Normalized segments
+        let parts = x.replaceAll("\\", "/").split("/").filter(Boolean)
         if (parts.length <= 1) return []
-        // קטגוריה = כל התיקיות (ללא שם הקובץ)
-        return parts.slice(0, parts.length - 1)
+
+        // Drop file name
+        parts = parts.slice(0, parts.length - 1)
+
+        // Prefer starting from "ספרים" / "books" if present (removes technical prefixes like sefariaToOtzaria/sefaria_export)
+        const idxBooks = parts.findIndex(s => s === "ספרים" || String(s).toLowerCase() === "books")
+        if (idxBooks >= 0) parts = parts.slice(idxBooks + 1)
+
+        // If the library is always under "אוצריא"/"otzaria", skip it so top-level categories are meaningful
+        const idxOtz = parts.findIndex(s => s === "אוצריא" || String(s).toLowerCase() === "otzaria")
+        if (idxOtz === 0) parts = parts.slice(1)
+
+        // Also drop common technical prefixes if still present
+        const techPrefixes = ["sefariaToOtzaria", "sefaria_export", "sefariaToOtzaria/sefaria_export"]
+        if (parts[0] && techPrefixes.includes(parts[0])) parts = parts.slice(1)
+        if (parts[0] && parts[0] === "sefaria_export") parts = parts.slice(1)
+
+        return parts
       }
 
       function buildCategoryTree(list) {
