@@ -5,73 +5,320 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>ספרייה - קטלוג</title>
     <style>
-      body { font-family: system-ui, Arial; margin: 16px; }
-      .row { margin-top: 10px; }
-      .muted { color: #666; font-size: 13px; }
-      input { width: 100%; padding: 10px; font-size: 16px; }
-      button { padding: 10px 12px; font-size: 14px; margin: 6px 6px 6px 0; cursor: pointer; }
-      .btnSmall { padding: 6px 10px; font-size: 13px; margin: 0; }
-      .grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-      .card { border: 1px solid #ddd; border-radius: 10px; padding: 10px; cursor: pointer; }
-      .title { font-weight: 700; }
-      .meta { margin-top: 6px; color: #444; font-size: 14px; }
-      .path { margin-top: 6px; color: #888; font-size: 12px; direction: ltr; text-align: left; word-break: break-all; }
-      .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-      .pill { padding: 4px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; color: #444; }
-      .viewerWrap { display: none; margin-top: 12px; }
-      iframe { width: 100%; height: 70vh; border: 1px solid #ddd; border-radius: 10px; }
-      label { user-select: none; }
-      .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+      :root{
+        --bg: #ffffff;
+        --muted: #666;
+        --border: #e6e6e6;
+        --card: #ffffff;
+        --shadow: 0 1px 2px rgba(0,0,0,.06);
+        --radius: 12px;
+        --sidebarW: 320px;
+      }
+
+      body{
+        font-family: system-ui, Arial;
+        margin: 0;
+        background: var(--bg);
+      }
+
+      .header{
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        padding: 14px 16px;
+      }
+
+      .hTitle{
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      h2{ margin: 0; font-size: 20px; }
+      .muted{ color: var(--muted); font-size: 13px; }
+
+      .toolbar{
+        margin-top: 10px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .pill{
+        padding: 4px 8px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 12px;
+        color: #444;
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      input[type="text"]{
+        width: 100%;
+        padding: 10px;
+        font-size: 16px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+      }
+
+      button{
+        padding: 10px 12px;
+        font-size: 14px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #fff;
+        cursor: pointer;
+      }
+      button:disabled{ opacity: .6; cursor: not-allowed; }
+
+      .btnSmall{
+        padding: 6px 10px;
+        font-size: 13px;
+        border-radius: 10px;
+      }
+
+      .layout{
+        display: grid;
+        grid-template-columns: var(--sidebarW) 1fr;
+        gap: 16px;
+        padding: 16px;
+        align-items: start;
+      }
+
+      @media (max-width: 980px){
+        .layout{ grid-template-columns: 1fr; }
+        .sidebar{ position: static; }
+      }
+
+      .sidebar{
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 10px;
+        position: sticky;
+        top: 132px;
+        max-height: calc(100vh - 160px);
+        overflow: auto;
+        background: var(--card);
+      }
+
+      .sideTop{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 4px 6px 10px 6px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 8px;
+      }
+
+      .sideTitle{ font-weight: 700; }
+
+      .catRow{
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 0;
+      }
+
+      .catToggle{
+        width: 28px;
+        padding: 6px 0;
+        text-align: center;
+      }
+
+      .catBtn{
+        flex: 1;
+        text-align: right;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid transparent;
+        background: transparent;
+      }
+      .catBtn:hover{ border-color: var(--border); background: #fafafa; }
+      .catBtn.selected{ border-color: #cfe1ff; background: #f4f8ff; }
+
+      .main{
+        min-width: 0;
+      }
+
+      .resultsHeader{
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .grid{
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .card{
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 10px;
+        background: var(--card);
+        box-shadow: var(--shadow);
+        cursor: pointer;
+      }
+
+      .title{ font-weight: 700; }
+      .meta{ margin-top: 6px; color: #444; font-size: 14px; }
+      .path{ margin-top: 6px; color: #888; font-size: 12px; direction: ltr; text-align: left; word-break: break-all; }
+      .actions{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+      a{ color: #0b57d0; }
+
+      /* Viewer (modal) */
+      .viewerModal{
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.35);
+        display: none;
+        z-index: 1000;
+        padding: 18px;
+      }
+      .viewerModal.show{ display: block; }
+      .viewerCard{
+        max-width: 1200px;
+        margin: 0 auto;
+        height: calc(100vh - 36px);
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 12px 42px rgba(0,0,0,.24);
+        border: 1px solid var(--border);
+        display: grid;
+        grid-template-rows: auto 1fr;
+        overflow: hidden;
+      }
+      .viewerTop{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      .viewerTop .muted{ font-size: 12px; }
+      iframe{
+        width: 100%;
+        height: 100%;
+        border: 0;
+      }
     </style>
   </head>
 
   <body>
-    <h2>קטלוג — פתיחה יציבה</h2>
-    <div class="muted">
-      קליק על כרטיסייה פותח בטאב חדש (כדי שלא “יקפוץ” בין כרטיסיות). אם תרצה, יש גם “צפה כאן”.
-    </div>
+    <div class="header">
+      <div class="hTitle">
+        <div>
+          <h2>ספרייה — קטלוג</h2>
+          <div class="muted">
+            קטגוריות נבנות לפי נתיבי התיקיות. החיפוש עובד על כל הקטלוג (גם פריטים שעוד לא הוצגו במסך).
+          </div>
+        </div>
+        <span id="status" class="pill">לא נטען</span>
+      </div>
 
-    <div class="row toolbar">
-      <button id="btnLoad" onclick="loadCatalog()">טען קטלוג</button>
-      <button onclick="scrollToResults()">לתוצאות</button>
-      <button onclick="openPathInNewTab()">פתח נתיב ידני בטאב</button>
-      <button onclick="openPathInline()">צפה בנתיב ידני כאן</button>
-      <button onclick="ping()">בדיקה: /api/ping</button>
+      <div class="toolbar">
+        <button id="btnLoad" onclick="refreshCatalog(true)">כפה רענון</button>
+        <button class="btnSmall" onclick="scrollToResults()">לתוצאות</button>
+        <button class="btnSmall" onclick="openPathInNewTab()">פתח נתיב ידני בטאב</button>
+        <button class="btnSmall" onclick="openPathInline()">צפה בנתיב ידני כאן</button>
+        <button class="btnSmall" onclick="ping()">בדיקה: /api/ping</button>
 
-      <label class="pill">
-        <input id="showAll" type="checkbox" onchange="applySearch()" />
-        הצג גם פריטים בלי קובץ
-      </label>
+        <label class="pill">
+          <input id="showAll" type="checkbox" onchange="applySearch()" />
+          הצג גם פריטים בלי קובץ
+        </label>
 
-      <span id="status" class="pill">לא נטען</span>
-    </div>
+        <label class="pill">
+          <input id="searchAllCats" type="checkbox" onchange="applySearch()" checked />
+          חיפוש בכל הקטגוריות
+        </label>
+      </div>
 
-    <div class="row">
-      <input id="q" placeholder="חיפוש (כותרת/מחבר/נתיב)..." oninput="onSearchInput()" />
-    </div>
+      <div class="actions">
+        <input id="q" type="text" placeholder="חיפוש (כותרת/מחבר/נתיב)..." oninput="onSearchInput()" />
+      </div>
 
-    <div class="row">
-      <input id="path" placeholder="נתיב ידני בתוך הריפו (למשל: .../file.pdf)" />
-      <div class="muted">
-        קישור נוכחי: <a id="link" href="#" target="_blank" rel="noreferrer">—</a>
+      <div class="actions">
+        <input id="path" type="text" placeholder="נתיב ידני בתוך הריפו (למשל: .../file.pdf)" />
+        <div class="muted">
+          קישור נוכחי: <a id="link" href="#" target="_blank" rel="noreferrer">—</a>
+        </div>
       </div>
     </div>
 
-    <!-- Viewer נמצא למעלה כדי שלא יגרום לגלילה/טעינת עוד כרטיסיות -->
-    <div id="viewerWrap" class="viewerWrap">
-      <h3 style="margin: 0 0 8px 0;">צפייה בתוך הדף</h3>
-      <iframe id="viewer" title="viewer"></iframe>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="sideTop">
+          <div class="sideTitle">קטגוריות</div>
+          <button class="btnSmall" onclick="clearCategory()">הכל</button>
+        </div>
+        <div id="cats" class="muted">—</div>
+      </aside>
+
+      <main class="main">
+        <div class="resultsHeader">
+          <h3 id="resultsTitle" style="margin:0;">תוצאות</h3>
+          <div class="muted" id="scopeHint"></div>
+        </div>
+        <div id="results" class="grid"></div>
+      </main>
     </div>
 
-    <h3 id="resultsTitle" style="margin-top:16px;">תוצאות</h3>
-    <div id="results" class="grid"></div>
+    <div id="viewerWrap" class="viewerModal" onclick="onViewerBackdrop(event)">
+      <div class="viewerCard">
+        <div class="viewerTop">
+          <div>
+            <div style="font-weight:700;">צפייה בתוך הדף</div>
+            <div class="muted">אפשר לסגור עם ESC או קליק מחוץ לחלון.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btnSmall" onclick="openViewerInNewTab()">פתח בטאב</button>
+            <button class="btnSmall" onclick="hideViewer()">סגור</button>
+          </div>
+        </div>
+        <iframe id="viewer" title="viewer"></iframe>
+      </div>
+    </div>
 
     <script>
+      // =========================
+      // State
+      // =========================
       let items = []
       let currentList = []
       let renderCursor = 0
       const PAGE_SIZE = 60
 
+      let categoryRoot = null
+      let selectedCategorySegs = []
+      let expandedCategoryKeys = new Set()
+
+      let lastViewerPath = ""
+
+      // Cache settings
+      const IDB_DB = "otzaria_catalog"
+      const IDB_STORE = "kv"
+      const CATALOG_KEY = "catalog_v1"
+      const MAX_CATALOG_AGE_MS = 12 * 60 * 60 * 1000 // 12 שעות
+
+      // =========================
+      // UI helpers
+      // =========================
       function setStatus(text) {
         document.getElementById("status").textContent = text
       }
@@ -84,8 +331,13 @@
         document.getElementById("resultsTitle").scrollIntoView({ behavior: "smooth", block: "start" })
       }
 
-      function showViewer() {
-        document.getElementById("viewerWrap").style.display = "block"
+      function escapeHtml(s) {
+        return String(s ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;")
       }
 
       function encodePath(path) {
@@ -117,78 +369,113 @@
         window.open(viewer, "_blank", "noopener,noreferrer")
       }
 
-
       function viewInline(path) {
         const p = String(path || "").trim()
         if (!p) return
+        lastViewerPath = p
         const viewerUrl = "/view?path=" + encodeURIComponent(p)
         refreshLink(viewerUrl)
-        showViewer()
-        document.getElementById("viewer").src = viewerUrl
-        document.getElementById("viewerWrap").scrollIntoView({ behavior: "smooth", block: "start" })
+        showViewer(viewerUrl)
       }
 
+      function showViewer(viewerUrl) {
+        const wrap = document.getElementById("viewerWrap")
+        wrap.classList.add("show")
+        document.getElementById("viewer").src = viewerUrl
+      }
 
+      function hideViewer() {
+        const wrap = document.getElementById("viewerWrap")
+        wrap.classList.remove("show")
+        const iframe = document.getElementById("viewer")
+        iframe.src = "about:blank"
+      }
+
+      function onViewerBackdrop(e) {
+        if (e.target && e.target.id === "viewerWrap") hideViewer()
+      }
+
+      function openViewerInNewTab() {
+        if (!lastViewerPath) return
+        openInNewTab(lastViewerPath)
+      }
+
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") hideViewer()
+      })
 
       function openPathInNewTab() {
         const p = document.getElementById("path").value.trim()
+        if (!p) return alert("הזן נתיב ידני")
         openInNewTab(p)
       }
 
       function openPathInline() {
         const p = document.getElementById("path").value.trim()
+        if (!p) return alert("הזן נתיב ידני")
         viewInline(p)
       }
 
-      function escapeHtml(s) {
-        return String(s)
-          .replaceAll("&", "&amp;")
-          .replaceAll("<", "&lt;")
-          .replaceAll(">", "&gt;")
-          .replaceAll('"', "&quot;")
-          .replaceAll("'", "&#039;")
+      async function ping() {
+        try {
+          const r = await fetch("/api/ping", { cache: "no-store" })
+          alert("ping: " + r.status + " " + (await r.text()))
+        } catch (e) {
+          alert("ping error: " + (e && e.message ? e.message : e))
+        }
       }
 
-      function looksLikePath(s) {
-        const x = String(s || "").trim()
-        if (!x) return false
-        if (x.includes("://")) return true
-        if ((x.includes("/") || x.includes("\\")) && /\.[a-z0-9]{2,6}$/i.test(x)) return true
-        if (/\.(pdf|txt|docx|json|zip|md)$/i.test(x)) return true
-        return false
+      // =========================
+      // IndexedDB (persistent cache)
+      // =========================
+      function openDb() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open(IDB_DB, 1)
+          req.onupgradeneeded = () => {
+            const db = req.result
+            if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE)
+          }
+          req.onsuccess = () => resolve(req.result)
+          req.onerror = () => reject(req.error)
+        })
       }
 
-      function looksLikeHashish(s) {
-        const x = String(s || "").trim()
-        if (!x) return false
-        if (/^[0-9a-f]{32}$/i.test(x)) return true
-        if (/^[0-9a-f]{40}$/i.test(x)) return true
-        if (/^[0-9a-f]{64}$/i.test(x)) return true
-        if (/^(sha1|sha256|md5):[0-9a-f]{16,64}$/i.test(x)) return true
-        return false
+      async function idbGet(key) {
+        const db = await openDb()
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, "readonly")
+          const store = tx.objectStore(IDB_STORE)
+          const r = store.get(key)
+          r.onsuccess = () => resolve(r.result)
+          r.onerror = () => reject(r.error)
+        })
       }
 
-      function normHashish(s) {
-        const x = String(s || "").trim()
-        if (!x) return ""
-        const m = x.match(/^(sha1|sha256|md5):(.+)$/i)
-        return (m && m[2] ? m[2] : x).toLowerCase()
+      async function idbSet(key, val) {
+        const db = await openDb()
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, "readwrite")
+          const store = tx.objectStore(IDB_STORE)
+          const r = store.put(val, key)
+          r.onsuccess = () => resolve(true)
+          r.onerror = () => reject(r.error)
+        })
       }
 
-      function basenameOf(p) {
-        const x = String(p || "").trim()
-        if (!x) return ""
-        const s = x.replaceAll("\\", "/")
-        const parts = s.split("/")
-        return (parts[parts.length - 1] || "").trim()
+      async function idbDel(key) {
+        const db = await openDb()
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, "readwrite")
+          const store = tx.objectStore(IDB_STORE)
+          const r = store.delete(key)
+          r.onsuccess = () => resolve(true)
+          r.onerror = () => reject(r.error)
+        })
       }
 
-      function stemOfFilename(fn) {
-        const x = String(fn || "").trim()
-        if (!x) return ""
-        return x.replace(/\.[a-z0-9]{2,6}$/i, "")
-      }
-
+      // =========================
+      // Catalog loading (keeps old retrieval logic)
+      // =========================
       async function fetchJsonAny(urls) {
         let lastErr = null
         for (const u of urls) {
@@ -200,7 +487,7 @@
             lastErr = e
           }
         }
-        throw lastErr || new Error("fetch failed")
+        throw lastErr || new Error("fetchJsonAny failed")
       }
 
       function objectToArrayMap(obj) {
@@ -238,24 +525,13 @@
           const sampleN = Math.min(keys.length, 500)
           let score = 0
           for (let i = 0; i < sampleN; i++) {
-            const kk = keys[i]
-            if (looksLikePath(kk) || looksLikeHashish(kk)) score++
+            const v = json[keys[i]]
+            if (v && typeof v === "object") score++
           }
-          if (score / sampleN >= 0.15) return objectToArrayMap(json)
-        }
-
-        let bestObj = null
-        let bestObjSize = 0
-        for (const v of Object.values(json)) {
-          if (v && typeof v === "object" && !Array.isArray(v)) {
-            const size = Object.keys(v).length
-            if (size > bestObjSize) {
-              bestObjSize = size
-              bestObj = v
-            }
+          if (score >= Math.floor(sampleN * 0.6)) {
+            return objectToArrayMap(json)
           }
         }
-        if (bestObj && bestObjSize > 0) return objectToArrayMap(bestObj)
 
         return []
       }
@@ -264,7 +540,7 @@
         for (const k of keys) {
           if (o && Object.prototype.hasOwnProperty.call(o, k)) return o[k]
         }
-        return undefined
+        return null
       }
 
       function normalizeMetaItem(x) {
@@ -272,7 +548,7 @@
         const titleVal = getAny(o, ["title", "name", "he_title", "heb_title", "book", "display", "caption"]) ?? ""
         const authorVal = getAny(o, ["author", "authors", "by", "creator", "writer"]) ?? ""
         const pathVal = getAny(o, ["path", "file", "filename", "relpath", "uri", "url", "href"]) ?? ""
-        const idVal = getAny(o, ["id", "book_id", "bookId", "file_id", "fileId", "filehash", "hash", "sha", "sha1", "sha256", "md5"]) ?? (o._key ?? "")
+        const idVal = getAny(o, ["id", "book_id", "bookId", "...", "hash", "sha", "sha1", "sha256", "md5"]) ?? (o._key ?? "")
 
         const title = Array.isArray(titleVal) ? titleVal.join(" ") : titleVal
         const author = Array.isArray(authorVal) ? authorVal.join(", ") : authorVal
@@ -331,27 +607,89 @@
         return out
       }
 
-      function extractManifestEntries(manifestJson) {
-        if (!manifestJson || typeof manifestJson !== "object") return []
-        const v = manifestJson.files || manifestJson.manifest || manifestJson.data || manifestJson
-        if (!v || typeof v !== "object" || Array.isArray(v)) return []
-        return Object.entries(v)
+      function looksLikePath(s) {
+        const x = String(s || "").trim()
+        if (!x) return false
+        if (x.startsWith("http://") || x.startsWith("https://")) return true
+        if (x.includes("/")) return true
+        if (x.includes("\\")) return true
+        if (x.match(/\.[a-z0-9]{2,6}$/i)) return true
+        return false
       }
+
+      function looksLikeHashish(s) {
+        const x = String(s || "").trim()
+        if (!x) return false
+        if (/^[0-9a-f]{32}$/i.test(x)) return true
+        if (/^[0-9a-f]{40}$/i.test(x)) return true
+        if (/^[0-9a-f]{64}$/i.test(x)) return true
+        if (/^(sha1|sha256|md5):[0-9a-f]{16,64}$/i.test(x)) return true
+        return false
+      }
+
+      function normHashish(s) {
+        const x = String(s || "").trim()
+        if (!x) return ""
+        const m = x.match(/^(sha1|sha256|md5):(.+)$/i)
+        return (m && m[2] ? m[2] : x).toLowerCase()
+      }
+
+      function basenameOf(p) {
+        const x = String(p || "").trim()
+        if (!x) return ""
+        const s = x.replaceAll("\\", "/")
+        const parts = s.split("/")
+        return (parts[parts.length - 1] || "").trim()
+      }
+
+      function stemOfFilename(fn) {
+        const x = String(fn || "").trim()
+        if (!x) return ""
+        return x.replace(/\.[a-z0-9]{2,6}$/i, "")
+      }
+
+
+function normalizeNameKey(s) {
+  let x = String(s || "").trim()
+  if (!x) return ""
+  // Decode URL-encoded forms (e.g. %22) when present
+  try {
+    if (/%[0-9A-Fa-f]{2}/.test(x)) x = decodeURIComponent(x)
+  } catch (e) {}
+  // Common HTML entities for quotes
+  x = x.replaceAll("&quot;", '"').replaceAll("&#34;", '"')
+  // Normalize Unicode (helps with Hebrew punctuation variants)
+  try { x = x.normalize("NFKC") } catch (e) {}
+  // Unify Hebrew gershayim/geresh and smart quotes
+  x = x
+    .replace(/[״“”″]/g, '"')
+    .replace(/[׳‘’]/g, "'")
+  // Remove quotes/apostrophes for matching
+  x = x.replace(/["']/g, "")
+  // Collapse whitespace
+  x = x.replace(/\s+/g, " ").trim()
+  return x.toLowerCase()
+}
+
+function addToMapVariants(map, key, value) {
+  const k = String(key || "").trim()
+  if (k && !map.has(k)) map.set(k, value)
+  const nk = normalizeNameKey(k)
+  if (nk && !map.has(nk)) map.set(nk, value)
+}
 
       function collectStringsFromValue(val) {
         const out = []
-        const push = (s) => {
-          if (typeof s !== "string") return
-          const x = s.trim()
-          if (!x) return
-          if (x.length > 500) return
-          out.push(x)
-          const m = x.match(/^(sha1|sha256|md5):(.+)$/i)
-          if (m && m[2]) out.push(m[2])
+        const push = (v) => {
+          if (v == null) return
+          const s = String(v).trim()
+          if (s) out.push(s)
         }
-
-        if (typeof val === "string") {
-          push(val)
+        if (typeof val === "string" || typeof val === "number" || typeof val === "boolean") {
+          push(val); return out
+        }
+        if (Array.isArray(val)) {
+          for (const v of val) push(v)
           return out
         }
         if (val && typeof val === "object") {
@@ -360,6 +698,18 @@
           }
         }
         return out
+      }
+
+      function extractManifestEntries(manifestJson) {
+        if (Array.isArray(manifestJson)) {
+          return manifestJson.map((x, i) => [String(i), x])
+        }
+        if (!manifestJson || typeof manifestJson !== "object") return []
+        const maybe = manifestJson.files || manifestJson.items || manifestJson.data || manifestJson.manifest
+        if (maybe && typeof maybe === "object") {
+          return Object.entries(maybe)
+        }
+        return Object.entries(manifestJson)
       }
 
       async function buildManifestMaps(manifestJson, onProgress) {
@@ -385,8 +735,8 @@
           if (path) {
             const b = basenameOf(path).toLowerCase()
             const st = stemOfFilename(b).toLowerCase()
-            if (b && !baseToPath.has(b)) baseToPath.set(b, path)
-            if (st && !stemToPath.has(st)) stemToPath.set(st, path)
+            addToMapVariants(baseToPath, b, path)
+            addToMapVariants(stemToPath, st, path)
 
             if (looksLikeHashish(kStr)) {
               const hk = normHashish(kStr)
@@ -399,8 +749,8 @@
               }
               const bb = basenameOf(s).toLowerCase()
               const sst = stemOfFilename(bb).toLowerCase()
-              if (bb && !baseToPath.has(bb)) baseToPath.set(bb, path)
-              if (sst && !stemToPath.has(sst)) stemToPath.set(sst, path)
+              addToMapVariants(baseToPath, bb, path)
+              addToMapVariants(stemToPath, sst, path)
             }
           }
 
@@ -414,146 +764,99 @@
         return { hashToPath, baseToPath, stemToPath }
       }
 
-      function resolvePathForMeta(meta, maps) {
-        if (looksLikePath(meta.path)) return meta.path
+      
+function pathFromItemUsingMaps(item, maps) {
+  if (looksLikePath(item.path)) return item.path
 
-        const strings = deepCollectStrings(meta._raw, 5, 220)
+  const strings = deepCollectStrings(item._raw, 5, 220)
 
-        for (const s of strings) {
-          if (!looksLikeHashish(s)) continue
-          const h = normHashish(s)
-          if (h && maps.hashToPath.has(h)) return maps.hashToPath.get(h)
+  for (const s of strings) {
+    if (!looksLikeHashish(s)) continue
+    const h = normHashish(s)
+    if (h && maps.hashToPath.has(h)) return maps.hashToPath.get(h)
+  }
+
+  for (const s of strings) {
+    const bRaw = basenameOf(s).toLowerCase()
+    const bNorm = normalizeNameKey(bRaw)
+    if (bRaw && maps.baseToPath.has(bRaw)) return maps.baseToPath.get(bRaw)
+    if (bNorm && maps.baseToPath.has(bNorm)) return maps.baseToPath.get(bNorm)
+  }
+
+  for (const s of strings) {
+    const bRaw = basenameOf(s).toLowerCase()
+    const stRaw = stemOfFilename(bRaw).toLowerCase()
+    const stNorm = normalizeNameKey(stRaw)
+    if (stRaw && maps.stemToPath.has(stRaw)) return maps.stemToPath.get(stRaw)
+    if (stNorm && maps.stemToPath.has(stNorm)) return maps.stemToPath.get(stNorm)
+  }
+
+  return ""
+}
+
+
+      function normForSearch(s) {
+        return String(s ?? "")
+          .toLowerCase()
+          .replace(/[\u0590-\u05FF]/g, (ch) => ch) // שומר עברית; רק מבטיח toLowerCase
+          .replace(/\s+/g, " ")
+          .trim()
+      }
+
+      function buildSearchField(it) {
+        const parts = [it.title, it.author, it.path, it.id, it._key]
+        return normForSearch(parts.filter(Boolean).join(" | "))
+      }
+
+      function compactItemForStorage(it) {
+        return {
+          title: it.title || "",
+          author: it.author || "",
+          path: it.path || "",
+          id: it.id || "",
+          q: it.q || "",
+          cat: it.cat || [],
         }
+      }
 
-        for (const s of strings) {
-          const b = basenameOf(s).toLowerCase()
-          if (b && maps.baseToPath.has(b)) return maps.baseToPath.get(b)
+      function hydrateItemFromStorage(it) {
+        const o = it && typeof it === "object" ? it : {}
+        return {
+          title: String(o.title || "").trim(),
+          author: String(o.author || "").trim(),
+          path: String(o.path || "").trim(),
+          id: String(o.id || "").trim(),
+          q: String(o.q || "").trim(),
+          cat: Array.isArray(o.cat) ? o.cat : []
         }
-
-        for (const s of strings) {
-          const b = basenameOf(s).toLowerCase()
-          const st = stemOfFilename(b).toLowerCase()
-          if (st && maps.stemToPath.has(st)) return maps.stemToPath.get(st)
-        }
-
-        return ""
       }
 
-      async function buildIndex(list, onProgress) {
-        const out = []
-        const total = list.length
-
-        for (let i = 0; i < total; i++) {
-          const it = list[i]
-          const q = (it.title + " " + it.author + " " + it.path).toLowerCase()
-          out.push({ ...it, q })
-
-          if (i % 2000 === 0) {
-            if (onProgress) onProgress(i, total)
-            await tick()
-          }
-        }
-
-        if (onProgress) onProgress(total, total)
-        return out
-      }
-
-      function clearResults() {
-        document.getElementById("results").innerHTML = ""
-        renderCursor = 0
-      }
-
-      function renderNextPage() {
-        const root = document.getElementById("results")
-        const end = Math.min(renderCursor + PAGE_SIZE, currentList.length)
-
-        for (let i = renderCursor; i < end; i++) {
-          const it = currentList[i]
-
-          const card = document.createElement("div")
-          card.className = "card"
-
-          const t = document.createElement("div")
-          t.className = "title"
-          t.textContent = it.title || "(ללא כותרת)"
-
-          const m = document.createElement("div")
-          m.className = "meta"
-          m.textContent = it.author || ""
-
-          const p = document.createElement("div")
-          p.className = "path"
-          p.textContent = it.path || "(אין נתיב)"
-
-          const actions = document.createElement("div")
-          actions.className = "actions"
-
-          const btnView = document.createElement("button")
-          btnView.className = "btnSmall"
-          btnView.textContent = "צפה כאן"
-          btnView.onclick = (e) => {
-            e.stopPropagation()
-            if (!it.path) return
-            viewInline(it.path)
-          }
-
-          const btnOpen = document.createElement("button")
-          btnOpen.className = "btnSmall"
-          btnOpen.textContent = "פתח בטאב"
-          btnOpen.onclick = (e) => {
-            e.stopPropagation()
-            if (!it.path) return
-            openInNewTab(it.path)
-          }
-
-          actions.appendChild(btnView)
-          actions.appendChild(btnOpen)
-
-          // קליק על כל הכרטיס = פתיחה בטאב (מונע “קפיצות”)
-          card.onclick = () => {
-            if (!it.path) return
-            openInNewTab(it.path)
-          }
-
-          card.appendChild(t)
-          card.appendChild(m)
-          card.appendChild(p)
-          card.appendChild(actions)
-
-          root.appendChild(card)
-        }
-
-        renderCursor = end
-      }
-
-      function applySearch() {
-        const q = document.getElementById("q").value.trim().toLowerCase()
-        const showAll = document.getElementById("showAll").checked
-
-        let base = items
-        if (!showAll) base = base.filter(it => it.path)
-
-        currentList = q ? base.filter(it => it.q.includes(q)) : base
-
-        clearResults()
-        renderNextPage()
-
-        const withPath = items.filter(it => it.path).length
-        const withoutPath = items.length - withPath
-        setStatus(`סה"כ: ${items.length} | עם קובץ: ${withPath} | בלי קובץ: ${withoutPath} | מוצג: ${currentList.length}`)
-      }
-
-      let searchTimer = null
-      function onSearchInput() {
-        clearTimeout(searchTimer)
-        searchTimer = setTimeout(applySearch, 150)
-      }
-
-      async function loadCatalog() {
-        setStatus("טוען metadata...")
-        document.getElementById("btnLoad").disabled = true
+      async function refreshCatalog(force) {
+        const btn = document.getElementById("btnLoad")
+        btn.disabled = true
 
         try {
+          if (force) {
+            setStatus("כופה רענון קטלוג...")
+            await idbDel(CATALOG_KEY)
+          }
+
+          // ניסיון טעינה מהמטמון (IndexedDB)
+          const cached = await idbGet(CATALOG_KEY)
+          if (cached && cached.items && cached.items.length && !force) {
+            const age = Date.now() - (cached.builtAt || 0)
+            items = cached.items.map(hydrateItemFromStorage)
+            setStatus(`נטען מהמטמון (עודכן לפני ${Math.round(age / 60000)} דקות)`)
+            afterCatalogLoaded()
+            // רענון שקט אם עבר זמן רב
+            if (age > MAX_CATALOG_AGE_MS) {
+              backgroundRefresh()
+            }
+            return
+          }
+
+          // בנייה מחדש (לוגיקה זהה לקוד הישן)
+          setStatus("טוען metadata...")
           const metaJson = await fetchJsonAny([
             "/api/metadata",
             "/lib/metadata.json"
@@ -588,45 +891,368 @@
             setStatus(`בונה מפות מה־manifest... (${done}/${total})`)
           })
 
-          setStatus(`משלים נתיבים... (0/${normalized.length})`)
-          let filled = 0
+          setStatus("מצמיד נתיבים (path) לפי ה־manifest...")
+          let fixed = 0
           for (let i = 0; i < normalized.length; i++) {
-            const p = resolvePathForMeta(normalized[i], maps)
-            normalized[i].path = looksLikePath(p) ? String(p).trim() : ""
-            if (normalized[i].path) filled++
-
-            if (i % 1000 === 0) {
-              setStatus(`משלים נתיבים... (${i}/${normalized.length}) | נמצאו: ${filled}`)
+            const it = normalized[i]
+            const p = pathFromItemUsingMaps(it, maps)
+            if (p && p !== it.path) { it.path = p; fixed++ }
+if (i % 3000 === 0) {
+              setStatus(`מצמיד נתיבים... (${i}/${normalized.length})`)
               await tick()
             }
           }
-          setStatus(`משלים נתיבים... (${normalized.length}/${normalized.length}) | נמצאו: ${filled}`)
 
-          setStatus("בונה אינדקס חיפוש...")
-          items = await buildIndex(normalized, null)
+          setStatus(`מצמיד נתיבים... (${normalized.length}/${normalized.length})`)
 
-          document.getElementById("showAll").checked = false
-          applySearch()
-          scrollToResults()
-
-          window.onscroll = () => {
-            if (renderCursor >= currentList.length) return
-            const nearBottom = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 400)
-            if (nearBottom) renderNextPage()
+          // בניית שדה חיפוש + קטגוריות (לפי נתיב תיקיות)
+          const finalItems = []
+          for (let i = 0; i < normalized.length; i++) {
+            const it = normalized[i]
+            const cat = computeCategoryFromPath(it.path)
+            const q = buildSearchField(it)
+            finalItems.push({
+              title: it.title,
+              author: it.author,
+              path: it.path,
+              id: it.id,
+              _key: it._key,
+              q,
+              cat
+            })
+            if (i % 5000 === 0) await tick()
           }
+
+          items = finalItems
+
+          // שמירה במטמון (רק שדות דחוסים)
+          try {
+            const payload = {
+              builtAt: Date.now(),
+              items: items.map(compactItemForStorage),
+              stats: {
+                total: items.length,
+                withPath: items.filter(x => x.path).length,
+                fixed
+              }
+            }
+            await idbSet(CATALOG_KEY, payload)
+            setStatus(`נטען + נשמר במטמון | סה"כ: ${payload.stats.total} | עם קובץ: ${payload.stats.withPath} | הושלמו נתיבים: ${fixed}`)
+          } catch (e) {
+            console.warn("Cache save failed:", e)
+            setStatus(`נטען (ללא שמירת מטמון) | סה"כ: ${items.length} | עם קובץ: ${items.filter(x => x.path).length}`)
+          }
+
+          afterCatalogLoaded()
         } catch (e) {
           console.error(e)
           setStatus("שגיאה")
           alert("שגיאה: " + (e && e.message ? e.message : e))
         } finally {
-          document.getElementById("btnLoad").disabled = false
+          btn.disabled = false
         }
       }
 
-      async function ping() {
-        const r = await fetch("/api/ping")
-        alert(await r.text())
+      async function backgroundRefresh() {
+        try {
+          // לא מפריעים למשתמש: רק משדרגים את המטמון ומעדכנים את ה־UI אם השתנה.
+          const old = await idbGet(CATALOG_KEY)
+          const oldAt = old && old.builtAt ? old.builtAt : 0
+          await refreshCatalog(true)
+          const now = await idbGet(CATALOG_KEY)
+          if (now && now.builtAt && now.builtAt !== oldAt) {
+            // כבר עודכן וה־UI עודכן ע"י refreshCatalog(true)
+          }
+        } catch (e) {
+          console.warn("backgroundRefresh failed:", e)
+        }
       }
+
+      // =========================
+      // Categories
+      // =========================
+      function computeCategoryFromPath(p) {
+        const x = String(p || "").trim()
+        if (!x) return []
+        if (x.startsWith("http://") || x.startsWith("https://")) return []
+        const parts = x.replaceAll("\\", "/").split("/").filter(Boolean)
+        if (parts.length <= 1) return []
+        // קטגוריה = כל התיקיות (ללא שם הקובץ)
+        return parts.slice(0, parts.length - 1)
+      }
+
+      function buildCategoryTree(list) {
+        const root = { name: "", segs: [], count: 0, children: new Map() }
+        function getChild(parent, name, segs) {
+          if (!parent.children.has(name)) {
+            parent.children.set(name, { name, segs, count: 0, children: new Map() })
+          }
+          return parent.children.get(name)
+        }
+
+        for (const it of list) {
+          if (!it.path) continue
+          const segs = Array.isArray(it.cat) ? it.cat : computeCategoryFromPath(it.path)
+          let node = root
+          node.count++
+          for (let i = 0; i < segs.length; i++) {
+            const s = String(segs[i] || "").trim()
+            if (!s) continue
+            const nextSegs = segs.slice(0, i + 1)
+            node = getChild(node, s, nextSegs)
+            node.count++
+          }
+        }
+        return root
+      }
+
+      function catKey(segs) {
+        return (segs || []).join("/")
+      }
+
+      function toggleExpanded(segs) {
+        const k = catKey(segs)
+        if (expandedCategoryKeys.has(k)) expandedCategoryKeys.delete(k)
+        else expandedCategoryKeys.add(k)
+      }
+
+      function selectCategory(segs) {
+        selectedCategorySegs = Array.isArray(segs) ? segs : []
+        // פותחים אוטומטית את הדרך עד הצומת שנבחר
+        let acc = []
+        for (const s of selectedCategorySegs) {
+          acc = [...acc, s]
+          expandedCategoryKeys.add(catKey(acc))
+        }
+        applySearch()
+        scrollToResults()
+        renderCategories()
+      }
+
+      function clearCategory() {
+        selectedCategorySegs = []
+        applySearch()
+        renderCategories()
+      }
+
+      function renderCategories() {
+        const box = document.getElementById("cats")
+        if (!categoryRoot) {
+          box.textContent = "—"
+          return
+        }
+        box.innerHTML = ""
+        const frag = document.createDocumentFragment()
+
+        const children = Array.from(categoryRoot.children.values())
+          .sort((a, b) => a.name.localeCompare(b.name, "he"))
+
+        if (!children.length) {
+          box.textContent = "אין קטגוריות (או שאין נתיבים)"
+          return
+        }
+
+        for (const child of children) {
+          frag.appendChild(renderCatNode(child, 0))
+        }
+
+        box.appendChild(frag)
+      }
+
+      function renderCatNode(node, depth) {
+        const wrap = document.createElement("div")
+
+        const row = document.createElement("div")
+        row.className = "catRow"
+        row.style.paddingRight = (depth * 14) + "px"
+
+        const hasKids = node.children && node.children.size
+        const toggle = document.createElement("button")
+        toggle.className = "btnSmall catToggle"
+        toggle.textContent = hasKids ? (expandedCategoryKeys.has(catKey(node.segs)) ? "▾" : "▸") : "•"
+        toggle.disabled = !hasKids
+        toggle.onclick = (e) => {
+          e.stopPropagation()
+          if (!hasKids) return
+          toggleExpanded(node.segs)
+          renderCategories()
+        }
+
+        const btn = document.createElement("button")
+        btn.className = "catBtn" + (catKey(node.segs) === catKey(selectedCategorySegs) ? " selected" : "")
+        btn.textContent = `${node.name} (${node.count})`
+        btn.onclick = (e) => {
+          e.stopPropagation()
+          selectCategory(node.segs)
+        }
+
+        row.appendChild(toggle)
+        row.appendChild(btn)
+        wrap.appendChild(row)
+
+        if (hasKids && expandedCategoryKeys.has(catKey(node.segs))) {
+          const kids = Array.from(node.children.values())
+            .sort((a, b) => a.name.localeCompare(b.name, "he"))
+          for (const k of kids) {
+            wrap.appendChild(renderCatNode(k, depth + 1))
+          }
+        }
+
+        return wrap
+      }
+
+      // =========================
+      // Search + render
+      // =========================
+      let searchTimer = null
+      function onSearchInput() {
+        clearTimeout(searchTimer)
+        searchTimer = setTimeout(applySearch, 150)
+      }
+
+      function hasCategoryPrefix(it, segs) {
+        if (!it || !it.path) return false
+        const cat = Array.isArray(it.cat) ? it.cat : computeCategoryFromPath(it.path)
+        if (cat.length < segs.length) return false
+        for (let i = 0; i < segs.length; i++) {
+          if (cat[i] !== segs[i]) return false
+        }
+        return true
+      }
+
+      function applySearch() {
+        const q = document.getElementById("q").value.trim().toLowerCase()
+        const showAll = document.getElementById("showAll").checked
+        const searchAllCats = document.getElementById("searchAllCats").checked
+
+        let base = items
+        if (!showAll) base = base.filter(it => it.path)
+
+        let scoped = base
+        // כשיש קטגוריה נבחרת:
+        // - אם אין חיפוש -> מסננים לפי קטגוריה
+        // - אם יש חיפוש:
+        //   - אם "חיפוש בכל הקטגוריות" דלוק -> לא מסננים לפי קטגוריה
+        //   - אחרת -> מסננים לפי קטגוריה
+        const hasCat = selectedCategorySegs && selectedCategorySegs.length
+        if (hasCat && (!q || !searchAllCats)) {
+          scoped = scoped.filter(it => hasCategoryPrefix(it, selectedCategorySegs))
+        }
+
+        currentList = q ? scoped.filter(it => (it.q || "").includes(q)) : scoped
+
+        clearResults()
+        renderNextPage()
+        updateHeaderStats(q, showAll, searchAllCats)
+      }
+
+      function updateHeaderStats(q, showAll, searchAllCats) {
+        const withPath = items.filter(it => it.path).length
+        const withoutPath = items.length - withPath
+        const catLabel = selectedCategorySegs && selectedCategorySegs.length ? selectedCategorySegs.join(" / ") : "הכל"
+        const scope = (q && searchAllCats) ? "כל הקטגוריות" : catLabel
+
+        document.getElementById("scopeHint").textContent =
+          `תחום: ${scope} | מוצג: ${currentList.length} | סה"כ: ${items.length} | עם קובץ: ${withPath} | בלי קובץ: ${withoutPath}`
+
+        document.getElementById("resultsTitle").textContent =
+          q ? `תוצאות חיפוש (${currentList.length})` : `תוצאות (${currentList.length})`
+      }
+
+      function clearResults() {
+        document.getElementById("results").innerHTML = ""
+        renderCursor = 0
+      }
+
+      function renderNextPage() {
+        const results = document.getElementById("results")
+        const end = Math.min(renderCursor + PAGE_SIZE, currentList.length)
+
+        for (let i = renderCursor; i < end; i++) {
+          const it = currentList[i]
+
+          const card = document.createElement("div")
+          card.className = "card"
+
+          const t = document.createElement("div")
+          t.className = "title"
+          t.textContent = it.title || "(ללא כותרת)"
+
+          const m = document.createElement("div")
+          m.className = "meta"
+          m.textContent = it.author || ""
+
+          const p = document.createElement("div")
+          p.className = "path"
+          p.textContent = it.path || ""
+
+          const actions = document.createElement("div")
+          actions.className = "actions"
+
+          const b1 = document.createElement("button")
+          b1.className = "btnSmall"
+          b1.textContent = "פתח בטאב"
+          b1.onclick = (e) => { e.stopPropagation(); openInNewTab(it.path) }
+
+          const b2 = document.createElement("button")
+          b2.className = "btnSmall"
+          b2.textContent = "צפה כאן"
+          b2.onclick = (e) => { e.stopPropagation(); viewInline(it.path) }
+
+          const b3 = document.createElement("button")
+          b3.className = "btnSmall"
+          b3.textContent = "פתח קטגוריה"
+          b3.onclick = (e) => {
+            e.stopPropagation()
+            const segs = Array.isArray(it.cat) ? it.cat : computeCategoryFromPath(it.path)
+            if (segs.length) selectCategory(segs)
+            else clearCategory()
+          }
+
+          actions.appendChild(b1)
+          actions.appendChild(b2)
+          actions.appendChild(b3)
+
+          card.appendChild(t)
+          card.appendChild(m)
+          if (it.path) card.appendChild(p)
+          card.appendChild(actions)
+
+          card.onclick = () => openInNewTab(it.path)
+
+          results.appendChild(card)
+        }
+
+        renderCursor = end
+      }
+
+      function afterCatalogLoaded() {
+        // ברירת מחדל: לפתוח כמה קטגוריות ראשיות כדי שיהיה נוח
+        categoryRoot = buildCategoryTree(items)
+        expandedCategoryKeys = new Set()
+        const top = Array.from(categoryRoot.children.values())
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 8)
+        for (const n of top) expandedCategoryKeys.add(catKey(n.segs))
+
+        renderCategories()
+        applySearch()
+
+        // Infinite scroll
+        window.onscroll = () => {
+          if (renderCursor >= currentList.length) return
+          const nearBottom = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 500)
+          if (nearBottom) renderNextPage()
+        }
+      }
+
+      // =========================
+      // Boot
+      // =========================
+      document.addEventListener("DOMContentLoaded", () => {
+        // טוען אוטומטית (מטמון אם קיים)
+        refreshCatalog(false)
+      })
     </script>
   </body>
 </html>
