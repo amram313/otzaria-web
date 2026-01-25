@@ -543,6 +543,19 @@
         return null
       }
 
+      function stripOuterQuotes(input) {
+        let x = String(input ?? "").trim()
+        if (!x) return ""
+        while (
+          (x.startsWith("\"") && x.endsWith("\"")) ||
+          (x.startsWith("'") && x.endsWith("'")) ||
+          (x.startsWith("“") && x.endsWith("”"))
+        ) {
+          x = x.slice(1, -1).trim()
+        }
+        return x
+      }
+
       function normalizeMetaItem(x) {
         const o = (x && typeof x === "object") ? x : {}
         const titleVal = getAny(o, ["title", "name", "he_title", "heb_title", "book", "display", "caption"]) ?? ""
@@ -557,7 +570,7 @@
         return {
           title: String(title || "").trim(),
           author: String(author || "").trim(),
-          path: String(path || "").trim(),
+          path: stripOuterQuotes(path),
           id: String(idVal ?? "").trim(),
           _key: String(o._key || "").trim(),
           _raw: o
@@ -602,7 +615,7 @@
       }
 
       function looksLikePath(s) {
-        const x = String(s || "").trim()
+        const x = stripOuterQuotes(s)
         if (!x) return false
         if (x.startsWith("http://") || x.startsWith("https://")) return true
         if (x.includes("/")) return true
@@ -625,7 +638,7 @@
       }
 
       function basenameOf(p) {
-        const x = String(p || "").trim()
+        const x = stripOuterQuotes(p)
         if (!x) return ""
         const s = x.replaceAll("\\", "/")
         const parts = s.split("/")
@@ -633,7 +646,7 @@
       }
 
       function stemOfFilename(fn) {
-        const x = String(fn || "").trim()
+        const x = stripOuterQuotes(fn)
         if (!x) return ""
         return x.replace(/\.[a-z0-9]{2,6}$/i, "")
       }
@@ -685,10 +698,10 @@
           const vStrings = collectStringsFromValue(vRaw)
 
           let path = ""
-          if (looksLikePath(kStr)) path = kStr
+          if (looksLikePath(kStr)) path = stripOuterQuotes(kStr)
           else {
             for (const s of vStrings) {
-              if (looksLikePath(s)) { path = s; break }
+              if (looksLikePath(s)) { path = stripOuterQuotes(s); break }
             }
           }
 
