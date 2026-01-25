@@ -1,11 +1,11 @@
+// functions/lib/[[path]].js
 export async function onRequest(context) {
   const { request, env } = context
   const url = new URL(request.url)
 
-  // You can override these in Cloudflare Pages → Settings → Environment variables
-  const OWNER  = (env && env.LIB_OWNER)  ? String(env.LIB_OWNER)  : "Otzaria"
-  const REPO   = (env && env.LIB_REPO)   ? String(env.LIB_REPO)   : "otzaria-library"
-  const BRANCH = (env && env.LIB_BRANCH) ? String(env.LIB_BRANCH) : "main"
+  const OWNER = env?.LIB_OWNER || "Otzaria"
+  const REPO = env?.LIB_REPO || "otzaria-library"
+  const BRANCH = env?.LIB_BRANCH || "main"
 
   // Route: /lib/<anything...>
   const pathname = url.pathname || ""
@@ -13,61 +13,78 @@ export async function onRequest(context) {
     return new Response("Missing file path", { status: 400 })
   }
 
-  // Preserve any existing percent-encoding in the path to avoid double-encoding.
+  // Preserve any existing percent-encoding in the path to avoid double-encoding
+  // and to support filenames that contain quotes and other special characters.
   let rel = pathname.replace(/^\/lib\/?/, "")
+
+  // Basic hardening
   if (!rel || rel.startsWith("/")) return new Response("Bad path", { status: 400 })
 
   const safeDecode = (s) => {
-    try { return decodeURIComponent(s) } catch (_) { return s }
+    try {
+      return decodeURIComponent(s)
+    } catch (_) {
+      return s
+    }
   }
 
   // Prevent traversal after decoding
   const decodedForCheck = rel.split("/").map(safeDecode).join("/")
   if (decodedForCheck.includes("..")) return new Response("Bad path", { status: 400 })
 
-  const upstreamRaw =
-    `https://raw.githubusercontent.com/${OWNER}/${REPO}/refs/heads/${BRANCH}/lib/${rel}`
-  const upstreamCdn =
-    `https://cdn.jsdelivr.net/gh/${OWNER}/${REPO}@${BRANCH}/lib/${rel}`
+  const primaryUrl = `https://raw.githubusercontent.com/${OWNER}/${REPO}/refs/heads/${BRANCH}/${rel}`
+  const cdnUrl = `https://cdn.jsdelivr.net/gh/${OWNER}/${REPO}@${BRANCH}/${rel}`
 
-  // Cache key should vary by the real upstream URL used
   const cacheKey = new Request(
-    url.toString() + (url.search ? "&" : "?") + "up=" + encodeURIComponent(upstreamRaw),
+    url.toString() + (url.search ? "&" : "?") + "up=" + encodeURIComponent(primaryUrl),
     request
   )
 
   const cached = await caches.default.match(cacheKey)
   if (cached) return cached
 
-  // Forward only what we actually need (mostly Range)
-  const headers = new Headers()
-  const range = request.headers.get("range")
-  if (range) headers.set("range", range)
+  // Forward only a small set of headers (mainly for range/conditional requests)
+  const forwardHeaders = new Headers()
+  for (const h of ["range", "if-none-match", "if-modified-since"]) {
+    const v = request.headers.get(h)
+    if (v) forwardHeaders.set(h, v)
+  }
 
   const method = request.method === "HEAD" ? "GET" : request.method
 
-  const tryFetch = async (targetUrl) => {
-    return fetch(targetUrl, { method, headers })
+  let r = await fetch(primaryUrl, {
+    method,
+    headers: forwardHeaders,
+  })
+
+  // Fallback to CDN when GitHub RAW rate-limits or has a transient failure
+  if (!r.ok && (r.status === 403 || r.status === 429 || r.status >= 500)) {
+    r = await fetch(cdnUrl, {
+      method,
+      headers: forwardHeaders,
+    })
   }
 
-  let r = await tryFetch(upstreamRaw)
   if (!r.ok) {
-    // Fallback to CDN (often more reliable and less rate-limited)
-    const r2 = await tryFetch(upstreamCdn)
-    if (r2.ok) r = r2
-    else {
-      // Return the REAL upstream status (not always 502), and include the URLs for debugging.
-      const body =
-        `Upstream error: ${r.status}\n` +
-        `raw: ${upstreamRaw}\n` +
-        `cdn: ${upstreamCdn}\n`
-      return new Response(body, { status: r.status || 502 })
+    let body = ""
+    try {
+      body = await r.text()
+    } catch (_) {
+      body = ""
     }
+
+    return new Response(body || `Upstream error: ${r.status}`, {
+      status: r.status,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+      },
+    })
   }
 
   const resp = new Response(r.body, r)
   resp.headers.set("Access-Control-Allow-Origin", "*")
-  // cache immutable for a year (library files are versioned in git)
   resp.headers.set("Cache-Control", "public, max-age=31536000, immutable")
 
   context.waitUntil(caches.default.put(cacheKey, resp.clone()))
