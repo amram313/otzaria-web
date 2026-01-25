@@ -1,54 +1,79 @@
+function safeDecode(s) {
+  try {
+    return decodeURIComponent(String(s))
+  } catch (e) {
+    return String(s)
+  }
+}
+
+function encodePathSegments(segments) {
+  // מנקה קידוד כפול:
+  // אם מגיע "%D7%90..." -> נהפוך ל-"א..." ואז נקודד פעם אחת נכון.
+  return segments
+    .map((s) => safeDecode(s))
+    .map((s) => encodeURIComponent(String(s)))
+    .join("/")
+}
+
 export async function onRequest(context) {
   const { request } = context
   const url = new URL(request.url)
 
-  const BRANCH = "main"
-
-  // Preserve any existing percent-encoding in the path to avoid double-encoding
-  // and to support filenames that contain quotes and other special characters.
-  // Route: /lib or /lib/<anything...>
+  // Route: /lib/<path...>
   const pathname = url.pathname || ""
   if (pathname === "/lib" || pathname === "/lib/") {
     return new Response("Missing file path", { status: 400 })
   }
 
-  let rel = pathname.replace(/^\/lib\/?/, "")
-  // Basic hardening
-  if (!rel || rel.startsWith("/")) return new Response("Bad path", { status: 400 })
-
-  const safeDecode = (s) => {
-    try { return decodeURIComponent(s) } catch (_) { return s }
-  }
+  const rel = pathname.replace(/^\/lib\/?/, "")
+  const segs = rel.split("/").filter(Boolean)
 
   // Prevent traversal after decoding
-  const decodedForCheck = rel.split("/").map(safeDecode).join("/")
-  if (decodedForCheck.includes("..")) return new Response("Bad path", { status: 400 })
-
-  const upstreamUrl =
-    `https://raw.githubusercontent.com/Otzaria/otzaria-library/refs/heads/${BRANCH}/lib/${rel}`
-
-  const cacheKey = new Request(
-    url.toString() + (url.search ? "&" : "?") + "up=" + encodeURIComponent(upstreamUrl),
-    request
-  )
-
-  const cached = await caches.default.match(cacheKey)
-  if (cached) return cached
-
-  // Forward method + headers for range/caching friendliness
-  const r = await fetch(upstreamUrl, {
-    method: request.method === "HEAD" ? "GET" : request.method,
-    headers: request.headers,
-  })
-
-  if (!r.ok) {
-    return new Response(`Upstream error: ${r.status}`, { status: 502 })
+  const decodedForCheck = segs.map(safeDecode)
+  if (decodedForCheck.some((s) => String(s).includes(".."))) {
+    return new Response("Bad path", { status: 400 })
   }
 
-  const resp = new Response(r.body, r)
-  resp.headers.set("Access-Control-Allow-Origin", "*")
-  resp.headers.set("Cache-Control", "public, max-age=31536000, immutable")
+  const OWNER = "Y-PLONI"
+  const REPO = "otzaria-library"
+  const BRANCH = "main"
 
-  context.waitUntil(caches.default.put(cacheKey, resp.clone()))
+  // IMPORTANT: upstream base is the REPO ROOT (not /lib/)
+  const upstreamBase =
+    `https://raw.githubusercontent.com/${OWNER}/${REPO}/refs/heads/${BRANCH}/`
+
+  const relPath = encodePathSegments(segs)
+  const upstreamUrl = upstreamBase + relPath
+
+  // תומך Range (חשוב ל-PDF). אם יש Range – לא מקשיחים cache.
+  const hasRange = request.headers.has("range")
+  const cacheKey = new Request(url.toString() + (url.search ? "&" : "?") + "up=" + encodeURIComponent(upstreamUrl), request)
+
+  if (!hasRange) {
+    const cached = await caches.default.match(cacheKey)
+    if (cached) return cached
+  }
+
+  const upstreamResp = await fetch(upstreamUrl, {
+    headers: request.headers,
+    method: request.method === "HEAD" ? "GET" : request.method,
+  })
+
+  if (!upstreamResp.ok) {
+    const msg =
+      `Upstream error: ${upstreamResp.status}\n` +
+      `URL: ${upstreamUrl}\n` +
+      `Rel path: ${relPath}\n`
+    return new Response(msg, { status: 502 })
+  }
+
+  const resp = new Response(upstreamResp.body, upstreamResp)
+  resp.headers.set("Access-Control-Allow-Origin", "*")
+  resp.headers.set("Cache-Control", hasRange ? "no-store" : "public, max-age=86400")
+
+  if (!hasRange) {
+    context.waitUntil(caches.default.put(cacheKey, resp.clone()))
+  }
+
   return resp
 }
