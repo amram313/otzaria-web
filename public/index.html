@@ -1,346 +1,607 @@
 <!doctype html>
+<!-- public/index.html -->
 <html lang="he" dir="rtl">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ספרייה - קטלוג</title>
     <style>
-      :root{
-        --bg: #ffffff;
-        --muted: #666;
-        --border: #e6e6e6;
-        --card: #ffffff;
-        --shadow: 0 1px 2px rgba(0,0,0,.06);
-        --radius: 12px;
-        --sidebarW: 320px;
+      :root {
+        --bg: #0b1020;
+        --card: rgba(255, 255, 255, 0.06);
+        --card2: rgba(255, 255, 255, 0.08);
+        --text: rgba(255, 255, 255, 0.92);
+        --muted: rgba(255, 255, 255, 0.6);
+        --accent: #6dd5fa;
+        --accent2: #9a7bff;
+        --good: #3ddc97;
+        --bad: #ff5c7a;
+        --warn: #ffd166;
+        --radius: 16px;
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+          monospace;
+        --sans: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans", "Apple Color Emoji",
+          "Segoe UI Emoji";
       }
 
-      body{
-        font-family: system-ui, Arial;
+      html,
+      body {
         margin: 0;
-        background: var(--bg);
+        padding: 0;
+        background: radial-gradient(1200px 600px at 70% -10%, rgba(109, 213, 250, 0.25), transparent 60%),
+          radial-gradient(900px 500px at 20% 10%, rgba(154, 123, 255, 0.2), transparent 55%),
+          radial-gradient(1000px 600px at 50% 120%, rgba(61, 220, 151, 0.12), transparent 60%),
+          var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
       }
 
-      .header{
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        background: var(--bg);
-        border-bottom: 1px solid var(--border);
-        padding: 14px 16px;
+      a {
+        color: inherit;
+        text-decoration: none;
       }
 
-      .hTitle{
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 22px 14px 60px;
+      }
+
+      header {
         display: flex;
-        align-items: baseline;
+        align-items: center;
         justify-content: space-between;
         gap: 12px;
-        flex-wrap: wrap;
+        margin-bottom: 14px;
       }
 
-      h2{ margin: 0; font-size: 20px; }
-      .muted{ color: var(--muted); font-size: 13px; }
-
-      .toolbar{
-        margin-top: 10px;
+      .brand {
         display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
+        gap: 12px;
         align-items: center;
       }
 
-      .pill{
-        padding: 4px 8px;
-        border: 1px solid var(--border);
-        border-radius: 999px;
+      .logo {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(109, 213, 250, 0.8), rgba(154, 123, 255, 0.8));
+        box-shadow: 0 12px 30px rgba(109, 213, 250, 0.18);
+      }
+
+      h1 {
+        font-size: 18px;
+        margin: 0;
+        line-height: 1.2;
+        letter-spacing: 0.2px;
+      }
+
+      .subtitle {
         font-size: 12px;
-        color: #444;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+
+      .pill {
         display: inline-flex;
-        gap: 6px;
         align-items: center;
-      }
-
-      input[type="text"]{
-        width: 100%;
-        padding: 10px;
-        font-size: 16px;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-      }
-
-      button{
+        gap: 8px;
         padding: 10px 12px;
-        font-size: 14px;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        background: #fff;
-        cursor: pointer;
-      }
-      button:disabled{ opacity: .6; cursor: not-allowed; }
-
-      .btnSmall{
-        padding: 6px 10px;
-        font-size: 13px;
-        border-radius: 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: var(--shadow);
+        user-select: none;
       }
 
-      .layout{
+      .pill small {
+        color: var(--muted);
+      }
+
+      .grid {
         display: grid;
-        grid-template-columns: var(--sidebarW) 1fr;
-        gap: 16px;
-        padding: 16px;
+        grid-template-columns: 1fr 360px;
+        gap: 14px;
         align-items: start;
       }
 
-      @media (max-width: 980px){
-        .layout{ grid-template-columns: 1fr; }
-        .sidebar{ position: static; }
+      @media (max-width: 960px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
       }
 
-      .sidebar{
-        border: 1px solid var(--border);
+      .card {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.05));
+        border: 1px solid rgba(255, 255, 255, 0.09);
         border-radius: var(--radius);
         box-shadow: var(--shadow);
-        padding: 10px;
-        position: sticky;
-        top: 132px;
-        max-height: calc(100vh - 160px);
-        overflow: auto;
-        background: var(--card);
+        overflow: hidden;
       }
 
-      .sideTop{
+      .card header {
+        margin: 0;
+        padding: 14px 14px 0;
+      }
+
+      .card .body {
+        padding: 14px;
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: 1fr 140px 140px;
+        gap: 10px;
+        margin: 0 0 12px;
+      }
+
+      @media (max-width: 720px) {
+        .controls {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      input[type="search"],
+      select,
+      button {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(0, 0, 0, 0.25);
+        color: var(--text);
+        outline: none;
+      }
+
+      button {
+        cursor: pointer;
+        background: linear-gradient(135deg, rgba(109, 213, 250, 0.25), rgba(154, 123, 255, 0.25));
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+
+      button:hover {
+        border-color: rgba(255, 255, 255, 0.18);
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .item {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        align-items: start;
+        padding: 12px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .item:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.12);
+      }
+
+      .title {
+        font-weight: 700;
+        line-height: 1.35;
+      }
+
+      .meta {
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.35;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 10px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .tag b {
+        color: var(--text);
+        font-weight: 700;
+      }
+
+      .right {
+        display: grid;
+        gap: 12px;
+      }
+
+      .tree {
+        display: grid;
+        gap: 6px;
+        padding: 12px;
+      }
+
+      .node {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        padding: 4px 6px 10px 6px;
-        border-bottom: 1px solid var(--border);
-        margin-bottom: 8px;
+        padding: 10px 10px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        cursor: pointer;
+        user-select: none;
       }
 
-      .sideTitle{ font-weight: 700; }
+      .node:hover {
+        border-color: rgba(255, 255, 255, 0.14);
+      }
 
-      .catRow{
-        display: flex;
+      .node .name {
+        display: inline-flex;
+        gap: 8px;
         align-items: center;
-        gap: 6px;
-        padding: 4px 0;
-      }
-
-      .catToggle{
-        width: 28px;
-        padding: 6px 0;
-        text-align: center;
-      }
-
-      .catBtn{
-        flex: 1;
-        text-align: right;
-        padding: 8px 10px;
-        border-radius: 10px;
-        border: 1px solid transparent;
-        background: transparent;
-      }
-      .catBtn:hover{ border-color: var(--border); background: #fafafa; }
-      .catBtn.selected{ border-color: #cfe1ff; background: #f4f8ff; }
-
-      .main{
         min-width: 0;
       }
 
-      .resultsHeader{
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-
-      .grid{
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 10px;
-        margin-top: 10px;
-      }
-
-      .card{
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        padding: 10px;
-        background: var(--card);
-        box-shadow: var(--shadow);
-        cursor: pointer;
-      }
-
-      .title{ font-weight: 700; }
-      .meta{ margin-top: 6px; color: #444; font-size: 14px; }
-      .path{ margin-top: 6px; color: #888; font-size: 12px; direction: ltr; text-align: left; word-break: break-all; }
-      .actions{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-
-      a{ color: #0b57d0; }
-
-      /* Viewer (modal) */
-      .viewerModal{
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,.35);
-        display: none;
-        z-index: 1000;
-        padding: 18px;
-      }
-      .viewerModal.show{ display: block; }
-      .viewerCard{
-        max-width: 1200px;
-        margin: 0 auto;
-        height: calc(100vh - 36px);
-        background: #fff;
-        border-radius: 16px;
-        box-shadow: 0 12px 42px rgba(0,0,0,.24);
-        border: 1px solid var(--border);
-        display: grid;
-        grid-template-rows: auto 1fr;
+      .node .name span {
+        white-space: nowrap;
         overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 240px;
       }
-      .viewerTop{
+
+      .badge {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.75);
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+      }
+
+      .footer {
+        margin-top: 16px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .hr {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.08);
+        margin: 10px 0;
+      }
+
+      .view {
+        display: none;
+      }
+
+      .view.active {
+        display: block;
+      }
+
+      .fileHeader {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        padding: 10px 12px;
-        border-bottom: 1px solid var(--border);
+        flex-wrap: wrap;
+        margin: 0 0 10px;
       }
-      .viewerTop .muted{ font-size: 12px; }
-      iframe{
-        width: 100%;
-        height: 100%;
-        border: 0;
+
+      .crumbs {
+        font-size: 12px;
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .crumbs a {
+        color: rgba(255, 255, 255, 0.82);
+      }
+
+      .crumbs .sep {
+        color: rgba(255, 255, 255, 0.25);
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .actions button {
+        width: auto;
+        padding: 10px 12px;
+      }
+
+      pre {
+        margin: 0;
+        padding: 14px;
+        border-radius: 14px;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        overflow: auto;
+        font-family: var(--mono);
+        font-size: 13px;
+        line-height: 1.55;
+        color: rgba(255, 255, 255, 0.92);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .statusLine {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .statusDot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.25);
+      }
+
+      .statusDot.good {
+        background: var(--good);
+      }
+
+      .statusDot.bad {
+        background: var(--bad);
+      }
+
+      .statusDot.warn {
+        background: var(--warn);
+      }
+
+      .kbd {
+        font-family: var(--mono);
+        font-size: 11px;
+        padding: 3px 6px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .small {
+        font-size: 12px;
+      }
+
+      .split {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
       }
     </style>
   </head>
-
   <body>
-    <div class="header">
-      <div class="hTitle">
-        <div>
-          <h2>ספרייה — קטלוג</h2>
-          <div class="muted">
-            קטגוריות נבנות לפי נתיבי התיקיות. החיפוש עובד על כל הקטלוג (גם פריטים שעוד לא הוצגו במסך).
-          </div>
-        </div>
-        <span id="status" class="pill">לא נטען</span>
-      </div>
-
-      <div class="toolbar">
-        <button id="btnLoad" onclick="refreshCatalog(true)">כפה רענון</button>
-        <button class="btnSmall" onclick="scrollToResults()">לתוצאות</button>
-        <button class="btnSmall" onclick="openPathInNewTab()">פתח נתיב ידני בטאב</button>
-        <button class="btnSmall" onclick="openPathInline()">צפה בנתיב ידני כאן</button>
-        <button class="btnSmall" onclick="ping()">בדיקה: /api/ping</button>
-
-        <label class="pill">
-          מצב תצוגה:
-          <select id="fileMode" onchange="applySearch()">
-            <option value="with" selected>רק עם קובץ</option>
-            <option value="without">רק בלי קובץ</option>
-            <option value="all">הכל</option>
-          </select>
-        </label>
-
-        <button class="btnSmall" onclick="clearQuery()">נקה חיפוש</button>
-        <button class="btnSmall" onclick="downloadMissing()">הורד רשימת חסרים</button>
-
-        <label class="pill">
-          <input id="searchAllCats" type="checkbox" onchange="applySearch()" checked />
-          חיפוש בכל הקטגוריות
-        </label>
-      </div>
-
-      <div class="actions">
-        <input id="q" type="text" placeholder="חיפוש (כותרת/מחבר/נתיב)..." oninput="onSearchInput()" />
-      </div>
-
-      <div class="actions">
-        <input id="path" type="text" placeholder="נתיב ידני בתוך הריפו (למשל: .../file.pdf)" />
-        <div class="muted">
-          קישור נוכחי: <a id="link" href="#" target="_blank" rel="noreferrer">—</a>
-        </div>
-      </div>
-    </div>
-
-    <div class="layout">
-      <aside class="sidebar">
-        <div class="sideTop">
-          <div class="sideTitle">קטגוריות</div>
-          <button class="btnSmall" onclick="clearCategory()">הכל</button>
-        </div>
-        <div id="cats" class="muted">—</div>
-      </aside>
-
-      <main class="main">
-        <div class="resultsHeader">
-          <h3 id="resultsTitle" style="margin:0;">תוצאות</h3>
-          <div class="muted" id="scopeHint"></div>
-        </div>
-        <div id="results" class="grid"></div>
-      </main>
-    </div>
-
-    <div id="viewerWrap" class="viewerModal" onclick="onViewerBackdrop(event)">
-      <div class="viewerCard">
-        <div class="viewerTop">
+    <div class="wrap">
+      <header>
+        <div class="brand">
+          <div class="logo"></div>
           <div>
-            <div style="font-weight:700;">צפייה בתוך הדף</div>
-            <div class="muted">אפשר לסגור עם ESC או קליק מחוץ לחלון.</div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button class="btnSmall" onclick="openViewerInNewTab()">פתח בטאב</button>
-            <button class="btnSmall" onclick="hideViewer()">סגור</button>
+            <h1>ספרייה - קטלוג</h1>
+            <div class="subtitle">חיפוש וניווט בקבצי הטקסט מתוך המאגר</div>
           </div>
         </div>
-        <iframe id="viewer" title="viewer"></iframe>
+
+        <div class="pill">
+          <div class="statusDot" id="statusDot"></div>
+          <div>
+            <div class="small">מצב חיבור: <b id="statusText">בודק…</b></div>
+            <small id="statusHint">/api/ping</small>
+          </div>
+        </div>
+      </header>
+
+      <div class="grid">
+        <div class="card">
+          <header>
+            <div class="controls">
+              <input id="q" type="search" placeholder="חפש לפי שם, מחבר, מקור, תגיות..." autocomplete="off" />
+              <select id="sort">
+                <option value="title">מיון: כותרת</option>
+                <option value="path">מיון: נתיב</option>
+                <option value="author">מיון: מחבר</option>
+              </select>
+              <button id="refresh">כפה רענון</button>
+            </div>
+            <div class="statusLine">
+              <div class="split">
+                <span class="muted">נמצאו <b id="count">0</b> קבצים</span>
+                <span class="muted">|</span>
+                <span class="muted">מסונן: <b id="filtered">0</b></span>
+              </div>
+              <div class="muted">קיצורי מקלדת: <span class="kbd">/</span> חיפוש, <span class="kbd">Esc</span> ניקוי</div>
+            </div>
+          </header>
+          <div class="body">
+            <div id="viewCatalog" class="view active">
+              <div class="list" id="list"></div>
+              <div class="footer" id="footer"></div>
+            </div>
+
+            <div id="viewFile" class="view">
+              <div class="fileHeader">
+                <div>
+                  <div class="crumbs" id="crumbs"></div>
+                  <div class="title" id="fileTitle"></div>
+                  <div class="meta" id="fileMeta"></div>
+                </div>
+                <div class="actions">
+                  <button id="back">חזרה</button>
+                  <button id="openRaw">פתח קובץ</button>
+                  <button id="copyLink">העתק קישור</button>
+                </div>
+              </div>
+
+              <div class="hr"></div>
+
+              <pre id="fileContent">טוען…</pre>
+
+              <div class="footer" id="fileFooter"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="right">
+          <div class="card">
+            <header>
+              <div class="muted">קטגוריות</div>
+            </header>
+            <div class="tree" id="tree"></div>
+          </div>
+
+          <div class="card">
+            <header>
+              <div class="muted">מידע</div>
+            </header>
+            <div class="body">
+              <div class="muted">
+                הנתונים נטענים מתוך:
+                <span class="kbd">/api/manifest</span>
+                + <span class="kbd">/api/metadata</span>
+              </div>
+              <div class="hr"></div>
+              <div class="muted small" id="infoBox">טוען…</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <script>
-      // =========================
-      // State
-      // =========================
-      let items = []
-      let lastMaps = null
-      let currentList = []
-      let renderCursor = 0
+      // ----------------------------
+      // Config
+      // ----------------------------
+      const API_MANIFEST = "/api/manifest"
+      const API_METADATA = "/api/metadata"
+      const API_PING = "/api/ping"
+      const API_LIB = "/lib"
       const PAGE_SIZE = 60
 
-      let categoryRoot = null
-      let selectedCategorySegs = []
-      let expandedCategoryKeys = new Set()
-
-      let lastViewerPath = ""
-
-      // Cache settings
-      const IDB_DB = "otzaria_catalog"
-      const IDB_STORE = "kv"
-      const CATALOG_KEY = "catalog_v1"
-      const MAX_CATALOG_AGE_MS = 12 * 60 * 60 * 1000 // 12 שעות
-
-      // =========================
-      // UI helpers
-      // =========================
-      function setStatus(text) {
-        document.getElementById("status").textContent = text
+      // ----------------------------
+      // State
+      // ----------------------------
+      const state = {
+        items: [],
+        filtered: [],
+        meta: {},
+        catTree: null,
+        selectedCat: [],
+        page: 1,
+        view: "catalog",
+        file: null,
+        cacheKey: "otzaria_catalog_cache_v3",
+        cacheMetaKey: "otzaria_meta_cache_v3",
       }
 
-      function tick() {
-        return new Promise(r => setTimeout(r, 0))
+      // ----------------------------
+      // UI refs
+      // ----------------------------
+      const $ = (id) => document.getElementById(id)
+      const elList = $("list")
+      const elTree = $("tree")
+      const elCount = $("count")
+      const elFiltered = $("filtered")
+      const elFooter = $("footer")
+      const elStatusDot = $("statusDot")
+      const elStatusText = $("statusText")
+      const elStatusHint = $("statusHint")
+      const elViewCatalog = $("viewCatalog")
+      const elViewFile = $("viewFile")
+      const elQ = $("q")
+      const elSort = $("sort")
+      const elInfoBox = $("infoBox")
+
+      const elCrumbs = $("crumbs")
+      const elFileTitle = $("fileTitle")
+      const elFileMeta = $("fileMeta")
+      const elFileContent = $("fileContent")
+      const elFileFooter = $("fileFooter")
+
+      // Buttons
+      $("refresh").addEventListener("click", () => loadAll({ force: true }))
+      $("back").addEventListener("click", () => {
+        history.pushState({}, "", location.pathname)
+        showCatalog()
+      })
+      $("openRaw").addEventListener("click", () => {
+        if (!state.file) return
+        const url = `${API_LIB}/${encodeURI(state.file.path)}`
+        window.open(url, "_blank", "noopener,noreferrer")
+      })
+      $("copyLink").addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(location.href)
+        } catch (_) {}
+      })
+
+      // Keyboard shortcuts
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "/" && document.activeElement !== elQ) {
+          e.preventDefault()
+          elQ.focus()
+        }
+        if (e.key === "Escape") {
+          if (document.activeElement === elQ) {
+            elQ.value = ""
+            applyFilters()
+          }
+        }
+      })
+
+      // Search input
+      elQ.addEventListener("input", () => {
+        state.page = 1
+        applyFilters()
+      })
+      elSort.addEventListener("change", () => {
+        state.page = 1
+        applyFilters()
+      })
+
+      // Routing
+      window.addEventListener("popstate", () => route(location.pathname + location.search))
+      function route(full) {
+        const u = new URL(full, location.origin)
+        const p = u.pathname
+        const id = u.searchParams.get("file")
+        if (p === "/file" && id) {
+          const it = findById(id)
+          if (it) showFile(it)
+          else showCatalog()
+        } else {
+          showCatalog()
+        }
       }
 
-      function scrollToResults() {
-        document.getElementById("resultsTitle").scrollIntoView({ behavior: "smooth", block: "start" })
-      }
-
+      // ----------------------------
+      // Utils
+      // ----------------------------
       function escapeHtml(s) {
-        return String(s ?? "")
+        return String(s || "")
           .replaceAll("&", "&amp;")
           .replaceAll("<", "&lt;")
           .replaceAll(">", "&gt;")
@@ -348,688 +609,189 @@
           .replaceAll("'", "&#039;")
       }
 
-      function encodePath(path) {
-        return String(path ?? "")
-          .split("/")
-          .filter(Boolean)
-          .map((seg) => encodePreservePct(seg, encodeURIComponentStrict))
-          .join("/")
+      function normalize(s) {
+        return String(s || "")
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, " ")
       }
 
-      function encodeQueryValue(v) {
-        // ב-query רצוי לקודד גם /, ולכן משתמשים ב-encodeURIComponentStrict על כל המחרוזת
-        return encodePreservePct(String(v ?? ""), encodeURIComponentStrict)
+      function pick(obj, key, fallback = "") {
+        const v = obj && obj[key]
+        return v == null ? fallback : v
       }
 
-function libUrl(pathOrUrl) {
-        const v = String(pathOrUrl || "").trim()
-        if (!v) return ""
-        if (v.startsWith("http://") || v.startsWith("https://")) return v
-        return "/lib/" + encodePath(v)
+      function uniq(arr) {
+        return Array.from(new Set(arr))
       }
 
-      function refreshLink(url) {
-        const a = document.getElementById("link")
-        a.textContent = url || "—"
-        a.href = url || "#"
+      function joinCrumbs(arr) {
+        return (arr || []).filter(Boolean).join(" / ")
       }
 
-      function openInNewTab(path) {
-        const p = String(path || "").trim()
-        if (!p) return
-        const viewer = "/view?path=" + encodeQueryValue(p)
-        refreshLink(viewer)
-        window.open(viewer, "_blank", "noopener,noreferrer")
+      function isObj(x) {
+        return x && typeof x === "object" && !Array.isArray(x)
       }
 
-      function viewInline(path) {
-        const p = String(path || "").trim()
-        if (!p) return
-        lastViewerPath = p
-        const viewerUrl = "/view?path=" + encodeQueryValue(p)
-        refreshLink(viewerUrl)
-        showViewer(viewerUrl)
-      }
-
-      function showViewer(viewerUrl) {
-        const wrap = document.getElementById("viewerWrap")
-        wrap.classList.add("show")
-        document.getElementById("viewer").src = viewerUrl
-      }
-
-      function hideViewer() {
-        const wrap = document.getElementById("viewerWrap")
-        wrap.classList.remove("show")
-        const iframe = document.getElementById("viewer")
-        iframe.src = "about:blank"
-      }
-
-      function onViewerBackdrop(e) {
-        if (e.target && e.target.id === "viewerWrap") hideViewer()
-      }
-
-      function openViewerInNewTab() {
-        if (!lastViewerPath) return
-        openInNewTab(lastViewerPath)
-      }
-
-      window.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") hideViewer()
-      })
-
-      function openPathInNewTab() {
-        const p = document.getElementById("path").value.trim()
-        if (!p) return alert("הזן נתיב ידני")
-        openInNewTab(p)
-      }
-
-      function openPathInline() {
-        const p = document.getElementById("path").value.trim()
-        if (!p) return alert("הזן נתיב ידני")
-        viewInline(p)
-      }
-
+      // ----------------------------
+      // Data load + caching
+      // ----------------------------
       async function ping() {
         try {
-          const r = await fetch("/api/ping", { cache: "no-store" })
-          alert("ping: " + r.status + " " + (await r.text()))
-        } catch (e) {
-          alert("ping error: " + (e && e.message ? e.message : e))
+          const r = await fetch(API_PING, { method: "GET" })
+          if (!r.ok) throw new Error("bad")
+          elStatusDot.className = "statusDot good"
+          elStatusText.textContent = "מחובר"
+          elStatusHint.textContent = API_PING
+        } catch (_) {
+          elStatusDot.className = "statusDot bad"
+          elStatusText.textContent = "לא זמין"
+          elStatusHint.textContent = "בדוק פריסה / פונקציות"
         }
       }
 
-      // =========================
-      // IndexedDB (persistent cache)
-      // =========================
-      function openDb() {
-        return new Promise((resolve, reject) => {
-          const req = indexedDB.open(IDB_DB, 1)
-          req.onupgradeneeded = () => {
-            const db = req.result
-            if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE)
-          }
-          req.onsuccess = () => resolve(req.result)
-          req.onerror = () => reject(req.error)
-        })
-      }
+      async function loadAll({ force } = { force: false }) {
+        await ping()
 
-      async function idbGet(key) {
-        const db = await openDb()
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction(IDB_STORE, "readonly")
-          const store = tx.objectStore(IDB_STORE)
-          const r = store.get(key)
-          r.onsuccess = () => resolve(r.result)
-          r.onerror = () => reject(r.error)
-        })
-      }
-
-      async function idbSet(key, val) {
-        const db = await openDb()
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction(IDB_STORE, "readwrite")
-          const store = tx.objectStore(IDB_STORE)
-          const r = store.put(val, key)
-          r.onsuccess = () => resolve(true)
-          r.onerror = () => reject(r.error)
-        })
-      }
-
-      async function idbDel(key) {
-        const db = await openDb()
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction(IDB_STORE, "readwrite")
-          const store = tx.objectStore(IDB_STORE)
-          const r = store.delete(key)
-          r.onsuccess = () => resolve(true)
-          r.onerror = () => reject(r.error)
-        })
-      }
-
-      // =========================
-      // Catalog loading (keeps old retrieval logic)
-      // =========================
-      async function fetchJsonAny(urls) {
-        let lastErr = null
-        for (const u of urls) {
-          try {
-            const r = await fetch(u, { cache: "no-store" })
-            if (r.ok) return await r.json()
-            lastErr = new Error(`${u} -> HTTP ${r.status}`)
-          } catch (e) {
-            lastErr = e
-          }
-        }
-        throw lastErr || new Error("fetchJsonAny failed")
-      }
-
-      function objectToArrayMap(obj) {
-        const arr = []
-        for (const [k, v] of Object.entries(obj || {})) {
-          if (v && typeof v === "object") arr.push({ ...v, _key: k })
-          else arr.push({ title: String(v ?? "").trim(), _key: k })
-        }
-        return arr
-      }
-
-      function extractBestCollection(json) {
-        if (Array.isArray(json)) return json
-        if (!json || typeof json !== "object") return []
-
-        let bestArr = null
-        let bestLen = -1
-        for (const v of Object.values(json)) {
-          if (Array.isArray(v) && v.length > bestLen) {
-            bestArr = v
-            bestLen = v.length
-          }
-        }
-        if (bestArr) return bestArr
-
-        const containerKeys = ["items", "books", "data", "metadata", "list"]
-        for (const k of containerKeys) {
-          const v = json[k]
-          if (Array.isArray(v)) return v
-          if (v && typeof v === "object") return objectToArrayMap(v)
+        const cached = await readCache(force)
+        if (cached) {
+          state.items = cached.items || []
+          state.meta = cached.meta || {}
+          hydrateItems()
+          buildTreeAndRender()
+          applyFilters()
+          renderInfoBox()
+          route(location.pathname + location.search)
+          return
         }
 
-        const keys = Object.keys(json)
-        if (keys.length) {
-          const sampleN = Math.min(keys.length, 500)
-          let score = 0
-          for (let i = 0; i < sampleN; i++) {
-            const v = json[keys[i]]
-            if (v && typeof v === "object") score++
-          }
-          if (score >= Math.floor(sampleN * 0.6)) {
-            return objectToArrayMap(json)
-          }
-        }
-
-        return []
-      }
-
-      function getAny(o, keys) {
-        for (const k of keys) {
-          if (o && Object.prototype.hasOwnProperty.call(o, k)) return o[k]
-        }
-        return null
-      }
-
-      function normalizeMetaItem(x) {
-        const o = (x && typeof x === "object") ? x : {}
-        const titleVal = getAny(o, ["title", "name", "he_title", "heb_title", "book", "display", "caption"]) ?? ""
-        const authorVal = getAny(o, ["author", "authors", "by", "creator", "writer"]) ?? ""
-        const pathVal = getAny(o, ["path", "file", "filename", "relpath", "uri", "url", "href"]) ?? ""
-        const idVal = getAny(o, ["id", "book_id", "bookId", "...", "hash", "sha", "sha1", "sha256", "md5"]) ?? (o._key ?? "")
-
-        const title = Array.isArray(titleVal) ? titleVal.join(" ") : titleVal
-        const author = Array.isArray(authorVal) ? authorVal.join(", ") : authorVal
-        const path = Array.isArray(pathVal) ? pathVal[0] : pathVal
-
-        return {
-          title: String(title || "").trim(),
-          author: String(author || "").trim(),
-          path: String(path || "").trim(),
-          id: String(idVal ?? "").trim(),
-          _key: String(o._key || "").trim(),
-          _raw: o
-        }
-      }
-
-      function deepCollectStrings(root, maxDepth = 5, maxItems = 250) {
-        const out = []
-        const seen = new Set()
-
-        function push(v) {
-          const s = String(v || "").trim()
-          if (!s) return
-          if (s.length > 500) return
-          if (seen.has(s)) return
-          seen.add(s)
-          out.push(s)
-        }
-
-        function walk(node, depth) {
-          if (out.length >= maxItems) return
-          if (depth > maxDepth) return
-          if (node == null) return
-
-          const t = typeof node
-          if (t === "string" || t === "number" || t === "boolean") {
-            push(node)
-            return
-          }
-          if (Array.isArray(node)) {
-            for (let i = 0; i < node.length; i++) {
-              walk(node[i], depth + 1)
-              if (out.length >= maxItems) return
-            }
-            return
-          }
-          if (t === "object") {
-            for (const [k, v] of Object.entries(node)) {
-              push(k)
-              walk(v, depth + 1)
-              if (out.length >= maxItems) return
-            }
-          }
-        }
-
-        walk(root, 0)
-        return out
-      }
-
-      function looksLikePath(s) {
-        const x = String(s || "").trim()
-        if (!x) return false
-        if (x.startsWith("http://") || x.startsWith("https://")) return true
-        if (x.includes("/")) return true
-        if (x.includes("\\")) return true
-        if (x.match(/\.[a-z0-9]{2,6}$/i)) return true
-        return false
-      }
-
-      function looksLikeHashish(s) {
-        const x = String(s || "").trim()
-        if (!x) return false
-        if (/^[0-9a-f]{32}$/i.test(x)) return true
-        if (/^[0-9a-f]{40}$/i.test(x)) return true
-        if (/^[0-9a-f]{64}$/i.test(x)) return true
-        if (/^(sha1|sha256|md5):[0-9a-f]{16,64}$/i.test(x)) return true
-        return false
-      }
-
-      function normHashish(s) {
-        const x = String(s || "").trim()
-        if (!x) return ""
-        const m = x.match(/^(sha1|sha256|md5):(.+)$/i)
-        return (m && m[2] ? m[2] : x).toLowerCase()
-      }
-
-      function basenameOf(p) {
-        const x = String(p || "").trim()
-        if (!x) return ""
-        const s = x.replaceAll("\\", "/")
-        const parts = s.split("/")
-        return (parts[parts.length - 1] || "").trim()
-      }
-
-      function stemOfFilename(fn) {
-        const x = String(fn || "").trim()
-        if (!x) return ""
-        return x.replace(/\.[a-z0-9]{2,6}$/i, "")
-      }
-
-      function collectStringsFromValue(val) {
-        const out = []
-        const push = (v) => {
-          if (v == null) return
-          const s = String(v).trim()
-          if (s) out.push(s)
-        }
-        if (typeof val === "string" || typeof val === "number" || typeof val === "boolean") {
-          push(val); return out
-        }
-        if (Array.isArray(val)) {
-          for (const v of val) push(v)
-          return out
-        }
-        if (val && typeof val === "object") {
-          for (const v of Object.values(val)) {
-            if (typeof v === "string") push(v)
-          }
-        }
-        return out
-      }
-
-      function extractManifestEntries(manifestJson) {
-        if (Array.isArray(manifestJson)) {
-          return manifestJson.map((x, i) => [String(i), x])
-        }
-        if (!manifestJson || typeof manifestJson !== "object") return []
-        const maybe = manifestJson.files || manifestJson.items || manifestJson.data || manifestJson.manifest
-        if (maybe && typeof maybe === "object") {
-          return Object.entries(maybe)
-        }
-        return Object.entries(manifestJson)
-      }
-
-      async function buildManifestMaps(manifestJson, onProgress) {
-        const hashToPath = new Map()
-        const baseToPath = new Map()
-        const stemToPath = new Map()
-        const baseNormToPath = new Map()
-        const stemNormToPath = new Map()
-        const baseNormToPaths = new Map()
-        const stemNormToPaths = new Map()
-
-        const putUnique = (map, key, path) => {
-          if (!key) return
-          if (!map.has(key)) map.set(key, path)
-          else if (map.get(key) !== path) map.set(key, "")
-        }
-        const addMulti = (map, key, path) => {
-          if (!key) return
-          if (!map.has(key)) map.set(key, [])
-          const arr = map.get(key)
-          if (!Array.isArray(arr)) return
-          if (arr.includes(path)) return
-          // לא לאגור יותר מדי (מספיק לאבחון)
-          if (arr.length < 12) arr.push(path)
-        }
-
-        const entries = extractManifestEntries(manifestJson)
-        const total = entries.length
-
-        for (let i = 0; i < total; i++) {
-          const [k, vRaw] = entries[i]
-          const kStr = String(k || "").trim()
-          const vStrings = collectStringsFromValue(vRaw)
-
-          let path = ""
-          if (looksLikePath(kStr)) path = kStr
-          else {
-            for (const s of vStrings) {
-              if (looksLikePath(s)) { path = s; break }
-            }
-          }
-
-          if (path) {
-            const b = basenameOf(path).toLowerCase()
-            const st = stemOfFilename(b).toLowerCase()
-            if (b && !baseToPath.has(b)) baseToPath.set(b, path)
-            if (st && !stemToPath.has(st)) stemToPath.set(st, path)
-            putUnique(baseNormToPath, normalizeKey(b), path)
-              addMulti(baseNormToPaths, normalizeKey(b), path)
-            putUnique(stemNormToPath, normalizeKey(st), path)
-              addMulti(stemNormToPaths, normalizeKey(st), path)
-
-            if (looksLikeHashish(kStr)) {
-              const hk = normHashish(kStr)
-              if (hk && !hashToPath.has(hk)) hashToPath.set(hk, path)
-            }
-            for (const s of vStrings) {
-              if (looksLikeHashish(s)) {
-                const hv = normHashish(s)
-                if (hv && !hashToPath.has(hv)) hashToPath.set(hv, path)
-              }
-              const bb = basenameOf(s).toLowerCase()
-              const sst = stemOfFilename(bb).toLowerCase()
-              if (bb && !baseToPath.has(bb)) baseToPath.set(bb, path)
-              if (sst && !stemToPath.has(sst)) stemToPath.set(sst, path)
-              putUnique(baseNormToPath, normalizeKey(bb), path)
-              addMulti(baseNormToPaths, normalizeKey(bb), path)
-              putUnique(stemNormToPath, normalizeKey(sst), path)
-              addMulti(stemNormToPaths, normalizeKey(sst), path)
-            }
-          }
-
-          if (i % 5000 === 0) {
-            if (onProgress) onProgress(i, total)
-            await tick()
-          }
-        }
-
-        if (onProgress) onProgress(total, total)
-        return { hashToPath, baseToPath, stemToPath, baseNormToPath, stemNormToPath, baseNormToPaths, stemNormToPaths }
-      }
-
-      function pathFromItemUsingMaps(item, maps) {
-        if (looksLikePath(item.path)) return item.path
-
-        const strings = deepCollectStrings(item._raw, 5, 220)
-
-        for (const s of strings) {
-          if (!looksLikeHashish(s)) continue
-          const h = normHashish(s)
-          if (h && maps.hashToPath.has(h)) return maps.hashToPath.get(h)
-        }
-
-        for (const s of strings) {
-          const b = basenameOf(s).toLowerCase()
-          if (b && maps.baseToPath.has(b)) return maps.baseToPath.get(b)
-        }
-
-        for (const s of strings) {
-          const b = basenameOf(s).toLowerCase()
-          const st = stemOfFilename(b).toLowerCase()
-          if (st && maps.stemToPath.has(st)) return maps.stemToPath.get(st)
-        }
-
-        // התאמה רופפת: מתעלמים ממרכאות/פיסוק/קידודים שונים (רק אם חד-משמעי ב־manifest)
-        for (const s of strings) {
-          const b0 = basenameOf(s)
-          const nb = normalizeKey(b0)
-          if (nb && maps.baseNormToPath && maps.baseNormToPath.has(nb)) {
-            const p = maps.baseNormToPath.get(nb)
-            if (p) return p
-          }
-        }
-
-        for (const s of strings) {
-          const b0 = basenameOf(s)
-          const st0 = stemOfFilename(b0)
-          const ns = normalizeKey(st0)
-          if (ns && maps.stemNormToPath && maps.stemNormToPath.has(ns)) {
-            const p = maps.stemNormToPath.get(ns)
-            if (p) return p
-          }
-        }
-
-        // ניסיון אחרון: התאמה לפי כותרת (רק אם חד-משמעי)
-        const nt = normalizeKey(item.title || "")
-        if (nt && maps.stemNormToPath && maps.stemNormToPath.has(nt)) {
-          const p = maps.stemNormToPath.get(nt)
-          if (p) return p
-        }
-
-        return ""
-      }
-
-      function normForSearch(s) {
-        return String(s ?? "")
-          .toLowerCase()
-          .replace(/[\u0590-\u05FF]/g, (ch) => ch) // שומר עברית; רק מבטיח toLowerCase
-          .replace(/\s+/g, " ")
-          .trim()
-      }
-
-      function buildSearchField(it) {
-        const parts = [it.title, it.author, it.path, it.id, it._key]
-        return normForSearch(parts.filter(Boolean).join(" | "))
-      }
-
-      function compactItemForStorage(it) {
-        return {
-          title: it.title || "",
-          author: it.author || "",
-          path: it.path || "",
-          id: it.id || "",
-          q: it.q || "",
-          cat: it.cat || [],
-        }
-      }
-
-      function hydrateItemFromStorage(it) {
-        const o = it && typeof it === "object" ? it : {}
-        return {
-          title: String(o.title || "").trim(),
-          author: String(o.author || "").trim(),
-          path: String(o.path || "").trim(),
-          id: String(o.id || "").trim(),
-          q: String(o.q || "").trim(),
-          cat: Array.isArray(o.cat) ? o.cat : []
-        }
-      }
-
-      async function refreshCatalog(force) {
-        const btn = document.getElementById("btnLoad")
-        btn.disabled = true
+        elInfoBox.textContent = "טוען נתונים מהשרת…"
 
         try {
-          if (force) {
-            setStatus("כופה רענון קטלוג...")
-            await idbDel(CATALOG_KEY)
-          }
+          const [manifest, metadata] = await Promise.all([fetchJson(API_MANIFEST), fetchJson(API_METADATA)])
 
-          // ניסיון טעינה מהמטמון (IndexedDB)
-          const cached = await idbGet(CATALOG_KEY)
-          if (cached && cached.items && cached.items.length && !force) {
-            const age = Date.now() - (cached.builtAt || 0)
-            items = cached.items.map(hydrateItemFromStorage)
-            setStatus(`נטען מהמטמון (עודכן לפני ${Math.round(age / 60000)} דקות)`)
-            afterCatalogLoaded()
-            // רענון שקט אם עבר זמן רב
-            if (age > MAX_CATALOG_AGE_MS) {
-              backgroundRefresh()
-            }
-            return
-          }
+          const items = Array.isArray(manifest) ? manifest : manifest?.files || []
+          const meta = isObj(metadata) ? metadata : {}
 
-          // בנייה מחדש (לוגיקה זהה לקוד הישן)
-          setStatus("טוען metadata...")
-          const metaJson = await fetchJsonAny([
-            "/api/metadata",
-            "/lib/metadata.json"
-          ])
+          state.items = items.map((x) => normalizeItem(x))
+          state.meta = meta
 
-          const rawMetaItems = extractBestCollection(metaJson)
-          if (!rawMetaItems.length) {
-            setStatus("נטען metadata אבל לא זוהתה רשימה")
-            alert("לא הצלחתי לחלץ רשימת פריטים מתוך metadata.json")
-            return
-          }
+          hydrateItems()
+          buildTreeAndRender()
+          applyFilters()
+          renderInfoBox()
 
-          setStatus(`מעבד metadata... (0/${rawMetaItems.length})`)
-          const normalized = []
-          for (let i = 0; i < rawMetaItems.length; i++) {
-            normalized.push(normalizeMetaItem(rawMetaItems[i]))
-            if (i % 3000 === 0) {
-              setStatus(`מעבד metadata... (${i}/${rawMetaItems.length})`)
-              await tick()
-            }
-          }
-          setStatus(`מעבד metadata... (${rawMetaItems.length}/${rawMetaItems.length})`)
-
-          setStatus("טוען files_manifest...")
-          const manifestJson = await fetchJsonAny([
-            "/api/manifest",
-            "/lib/files_manifest.json"
-          ])
-
-          setStatus("בונה מפות מה־manifest...")
-          const maps = await buildManifestMaps(manifestJson, (done, total) => {
-            setStatus(`בונה מפות מה־manifest... (${done}/${total})`)
-          })
-          lastMaps = maps
-
-          setStatus("מצמיד נתיבים (path) לפי ה־manifest...")
-          let fixed = 0
-          for (let i = 0; i < normalized.length; i++) {
-            const it = normalized[i]
-            const p = pathFromItemUsingMaps(it, maps)
-            if (p && p !== it.path) { it.path = p; fixed++ }
-if (i % 3000 === 0) {
-              setStatus(`מצמיד נתיבים... (${i}/${normalized.length})`)
-              await tick()
-            }
-          }
-
-          setStatus(`מצמיד נתיבים... (${normalized.length}/${normalized.length})`)
-
-          // בניית שדה חיפוש + קטגוריות (לפי נתיב תיקיות)
-          const finalItems = []
-          for (let i = 0; i < normalized.length; i++) {
-            const it = normalized[i]
-            const cat = computeCategoryFromPath(it.path)
-            const q = buildSearchField(it)
-            finalItems.push({
-              title: it.title,
-              author: it.author,
-              path: it.path,
-              id: it.id,
-              _key: it._key,
-              q,
-              cat
-            })
-            if (i % 5000 === 0) await tick()
-          }
-
-          items = finalItems
-
-          // שמירה במטמון (רק שדות דחוסים)
-          try {
-            const payload = {
-              builtAt: Date.now(),
-              items: items.map(compactItemForStorage),
-              stats: {
-                total: items.length,
-                withPath: items.filter(x => x.path).length,
-                fixed
-              }
-            }
-            await idbSet(CATALOG_KEY, payload)
-            setStatus(`נטען + נשמר במטמון | סה"כ: ${payload.stats.total} | עם קובץ: ${payload.stats.withPath} | הושלמו נתיבים: ${fixed}`)
-          } catch (e) {
-            console.warn("Cache save failed:", e)
-            setStatus(`נטען (ללא שמירת מטמון) | סה"כ: ${items.length} | עם קובץ: ${items.filter(x => x.path).length}`)
-          }
-
-          afterCatalogLoaded()
-        } catch (e) {
-          console.error(e)
-          setStatus("שגיאה")
-          alert("שגיאה: " + (e && e.message ? e.message : e))
-        } finally {
-          btn.disabled = false
+          await writeCache()
+          route(location.pathname + location.search)
+        } catch (err) {
+          elInfoBox.textContent = "שגיאה בטעינת נתונים. בדוק /api/manifest ו-/api/metadata."
+          elStatusDot.className = "statusDot warn"
+          elStatusText.textContent = "שגיאת טעינה"
+          elStatusHint.textContent = String(err?.message || err)
         }
       }
 
-      async function backgroundRefresh() {
+      async function fetchJson(url) {
+        const r = await fetch(url, { method: "GET" })
+        if (!r.ok) throw new Error(`Fetch failed: ${r.status}\n${url}`)
+        return await r.json()
+      }
+
+      async function readCache(force) {
+        if (force) return null
         try {
-          // לא מפריעים למשתמש: רק משדרגים את המטמון ומעדכנים את ה־UI אם השתנה.
-          const old = await idbGet(CATALOG_KEY)
-          const oldAt = old && old.builtAt ? old.builtAt : 0
-          await refreshCatalog(true)
-          const now = await idbGet(CATALOG_KEY)
-          if (now && now.builtAt && now.builtAt !== oldAt) {
-            // כבר עודכן וה־UI עודכן ע"י refreshCatalog(true)
-          }
-        } catch (e) {
-          console.warn("backgroundRefresh failed:", e)
+          const raw = localStorage.getItem(state.cacheKey)
+          const rawMeta = localStorage.getItem(state.cacheMetaKey)
+          if (!raw || !rawMeta) return null
+          const obj = JSON.parse(raw)
+          const meta = JSON.parse(rawMeta)
+          if (!obj || !meta) return null
+          return { items: obj.items, meta }
+        } catch (_) {
+          return null
         }
       }
 
-      // =========================
-      // Categories
-      // =========================
+      async function writeCache() {
+        try {
+          localStorage.setItem(state.cacheKey, JSON.stringify({ items: state.items }))
+          localStorage.setItem(state.cacheMetaKey, JSON.stringify(state.meta))
+        } catch (_) {}
+      }
+
+      // ----------------------------
+      // Manifest normalization
+      // ----------------------------
+      function normalizeItem(x) {
+        if (typeof x === "string") {
+          return { path: x }
+        }
+        if (!isObj(x)) return {}
+        const it = { ...x }
+        if (!it.path && it.file) it.path = it.file
+        return it
+      }
+
+      function buildIdFromPath(path) {
+        return btoa(unescape(encodeURIComponent(path))).replaceAll("=", "")
+      }
+
+      function hydrateItems() {
+        for (const it of state.items) {
+          if (!it.path) continue
+          it.id = it.id || buildIdFromPath(it.path)
+          it.title = it.title || guessTitleFromPath(it.path)
+          it.author = it.author || ""
+          it.source = it.source || ""
+          it.tags = Array.isArray(it.tags) ? it.tags : []
+          it.cat = Array.isArray(it.cat) ? it.cat : null
+        }
+
+        // Join metadata by path/id if exists
+        const metaByPath = isObj(state.meta?.byPath) ? state.meta.byPath : null
+        const metaById = isObj(state.meta?.byId) ? state.meta.byId : null
+
+        if (metaByPath || metaById) {
+          for (const it of state.items) {
+            const keyPath = it.path
+            const keyId = it.id
+            const m = (metaByPath && metaByPath[keyPath]) || (metaById && metaById[keyId]) || null
+            if (m && isObj(m)) {
+              it.title = it.title || pick(m, "title", "")
+              it.author = it.author || pick(m, "author", "")
+              it.source = it.source || pick(m, "source", "")
+              const t = m.tags
+              if (Array.isArray(t) && t.length) it.tags = uniq([...(it.tags || []), ...t])
+              const c = m.cat
+              if (Array.isArray(c) && c.length) it.cat = c
+            }
+          }
+        }
+      }
+
+      function guessTitleFromPath(p) {
+        const parts = String(p || "").split("/").filter(Boolean)
+        if (!parts.length) return ""
+        const last = parts[parts.length - 1]
+        return last.replace(/\.[^.]+$/, "")
+      }
+
+      // ----------------------------
+      // Category tree
+      // ----------------------------
       function computeCategoryFromPath(p) {
         const x = String(p || "").trim()
         if (!x) return []
         if (x.startsWith("http://") || x.startsWith("https://")) return []
+        const parts = x.replaceAll("\\", "/").split("/").filter(Boolean)
 
-        // Normalized segments
-        let parts = x.replaceAll("\\", "/").split("/").filter(Boolean)
-        if (parts.length <= 1) return []
+        // אם "ספרים" מופיע בנתיב, נתחיל ממנו כדי לא להציג פרפיקסים טכניים (כמו DictaToOtzaria וכו')
+        const booksIdx = parts.indexOf("ספרים")
+        const start = booksIdx >= 0 && booksIdx < parts.length - 1 ? booksIdx + 1 : 0
 
-        // Drop file name
-        parts = parts.slice(0, parts.length - 1)
-
-        // Prefer starting from "ספרים" / "books" if present (removes technical prefixes like sefariaToOtzaria/sefaria_export)
-        const idxBooks = parts.findIndex(s => s === "ספרים" || String(s).toLowerCase() === "books")
-        if (idxBooks >= 0) parts = parts.slice(idxBooks + 1)
-
-        // If the library is always under "אוצריא"/"otzaria", skip it so top-level categories are meaningful
-        const idxOtz = parts.findIndex(s => s === "אוצריא" || String(s).toLowerCase() === "otzaria")
-        if (idxOtz === 0) parts = parts.slice(1)
-
-        // Also drop common technical prefixes if still present
-        const techPrefixes = ["sefariaToOtzaria", "sefaria_export", "sefariaToOtzaria/sefaria_export"]
-        if (parts[0] && techPrefixes.includes(parts[0])) parts = parts.slice(1)
-        if (parts[0] && parts[0] === "sefaria_export") parts = parts.slice(1)
-
-        return parts
+        if (parts.length - start <= 1) return []
+        // קטגוריה = כל התיקיות (ללא שם הקובץ)
+        return parts.slice(start, parts.length - 1)
       }
 
       function buildCategoryTree(list) {
@@ -1054,371 +816,323 @@ if (i % 3000 === 0) {
             node.count++
           }
         }
+
         return root
       }
 
-      function catKey(segs) {
-        return (segs || []).join("/")
+      function treeToArray(node) {
+        const arr = []
+        for (const child of node.children.values()) {
+          arr.push(child)
+        }
+        arr.sort((a, b) => a.name.localeCompare(b.name, "he"))
+        return arr
       }
 
-      function toggleExpanded(segs) {
-        const k = catKey(segs)
-        if (expandedCategoryKeys.has(k)) expandedCategoryKeys.delete(k)
-        else expandedCategoryKeys.add(k)
+      function buildTreeAndRender() {
+        state.catTree = buildCategoryTree(state.items)
+        renderTree()
       }
 
-      function selectCategory(segs) {
-        selectedCategorySegs = Array.isArray(segs) ? segs : []
-        // פותחים אוטומטית את הדרך עד הצומת שנבחר
-        let acc = []
-        for (const s of selectedCategorySegs) {
-          acc = [...acc, s]
-          expandedCategoryKeys.add(catKey(acc))
-        }
-        applySearch()
-        scrollToResults()
-        renderCategories()
-      }
+      function renderTree() {
+        elTree.innerHTML = ""
+        const root = state.catTree
+        if (!root) return
 
-      function clearCategory() {
-        selectedCategorySegs = []
-        applySearch()
-        renderCategories()
-      }
+        const stack = [{ node: root, depth: 0 }]
+        while (stack.length) {
+          const cur = stack.shift()
+          const children = treeToArray(cur.node)
+          for (const child of children) {
+            const row = document.createElement("div")
+            row.className = "node"
+            row.style.marginRight = `${cur.depth * 10}px`
 
-      function renderCategories() {
-        const box = document.getElementById("cats")
-        if (!categoryRoot) {
-          box.textContent = "—"
-          return
-        }
-        box.innerHTML = ""
-        const frag = document.createDocumentFragment()
+            const nameBox = document.createElement("div")
+            nameBox.className = "name"
 
-        const children = Array.from(categoryRoot.children.values())
-          .sort((a, b) => a.name.localeCompare(b.name, "he"))
+            const arrow = document.createElement("span")
+            arrow.textContent = "›"
+            arrow.style.opacity = "0.7"
+            nameBox.appendChild(arrow)
 
-        if (!children.length) {
-          box.textContent = "אין קטגוריות (או שאין נתיבים)"
-          return
-        }
+            const name = document.createElement("span")
+            name.textContent = child.name
+            nameBox.appendChild(name)
 
-        for (const child of children) {
-          frag.appendChild(renderCatNode(child, 0))
-        }
+            const badge = document.createElement("div")
+            badge.className = "badge"
+            badge.textContent = String(child.count)
 
-        box.appendChild(frag)
-      }
+            row.appendChild(nameBox)
+            row.appendChild(badge)
 
-      function renderCatNode(node, depth) {
-        const wrap = document.createElement("div")
+            row.addEventListener("click", () => {
+              state.selectedCat = child.segs
+              state.page = 1
+              applyFilters()
+            })
 
-        const row = document.createElement("div")
-        row.className = "catRow"
-        row.style.paddingRight = (depth * 14) + "px"
+            elTree.appendChild(row)
 
-        const hasKids = node.children && node.children.size
-        const toggle = document.createElement("button")
-        toggle.className = "btnSmall catToggle"
-        toggle.textContent = hasKids ? (expandedCategoryKeys.has(catKey(node.segs)) ? "▾" : "▸") : "•"
-        toggle.disabled = !hasKids
-        toggle.onclick = (e) => {
-          e.stopPropagation()
-          if (!hasKids) return
-          toggleExpanded(node.segs)
-          renderCategories()
-        }
-
-        const btn = document.createElement("button")
-        btn.className = "catBtn" + (catKey(node.segs) === catKey(selectedCategorySegs) ? " selected" : "")
-        btn.textContent = `${node.name} (${node.count})`
-        btn.onclick = (e) => {
-          e.stopPropagation()
-          selectCategory(node.segs)
-        }
-
-        row.appendChild(toggle)
-        row.appendChild(btn)
-        wrap.appendChild(row)
-
-        if (hasKids && expandedCategoryKeys.has(catKey(node.segs))) {
-          const kids = Array.from(node.children.values())
-            .sort((a, b) => a.name.localeCompare(b.name, "he"))
-          for (const k of kids) {
-            wrap.appendChild(renderCatNode(k, depth + 1))
+            if (child.children && child.children.size) {
+              stack.push({ node: child, depth: cur.depth + 1 })
+            }
           }
         }
-
-        return wrap
       }
 
-      // =========================
-      // Search + render
-      // =========================
-      let searchTimer = null
-      function onSearchInput() {
-        clearTimeout(searchTimer)
-        searchTimer = setTimeout(applySearch, 150)
-      }
+      // ----------------------------
+      // Filtering + sorting + paging
+      // ----------------------------
+      function applyFilters() {
+        const q = normalize(elQ.value)
+        const selected = state.selectedCat || []
 
-      function hasCategoryPrefix(it, segs) {
-        if (!it || !it.path) return false
-        const cat = Array.isArray(it.cat) ? it.cat : computeCategoryFromPath(it.path)
-        if (cat.length < segs.length) return false
-        for (let i = 0; i < segs.length; i++) {
-          if (cat[i] !== segs[i]) return false
+        let list = state.items.filter((it) => !!it.path)
+
+        if (selected.length) {
+          list = list.filter((it) => {
+            const segs = Array.isArray(it.cat) ? it.cat : computeCategoryFromPath(it.path)
+            if (!segs || segs.length < selected.length) return false
+            for (let i = 0; i < selected.length; i++) {
+              if (String(segs[i]) !== String(selected[i])) return false
+            }
+            return true
+          })
         }
-        return true
+
+        if (q) {
+          list = list.filter((it) => {
+            const hay = normalize(
+              [it.title, it.author, it.source, it.path, ...(it.tags || []), joinCrumbs(it.cat || [])].join(" ")
+            )
+            return hay.includes(q)
+          })
+        }
+
+        const sortKey = elSort.value
+        list.sort((a, b) => {
+          const av = normalize(a[sortKey] || "")
+          const bv = normalize(b[sortKey] || "")
+          return av.localeCompare(bv, "he")
+        })
+
+        state.filtered = list
+        renderList()
       }
 
-      
-      function clearQuery() {
-        const el = document.getElementById("q")
-        if (el) el.value = ""
-        applySearch()
-      }
+      function renderList() {
+        elList.innerHTML = ""
+        const total = state.items.length
+        const count = state.filtered.length
 
-      function downloadMissing() {
-        const missing = items
-          .filter(it => !it.path)
-          .map(it => {
-            const strings = deepCollectStrings(it._raw, 6, 140)
-            const hints = []
-            for (const s of strings) {
-              const x = String(s || "")
-              if (!x) continue
-              if (looksLikePath(x) || looksLikeHashish(x) || /\.(pdf|docx|epub|txt|zip|json)$/i.test(x) || /%22|["״׳'`´“”‘’]/.test(x)) {
-                hints.push(x)
-              }
-            }
-            return {
-              title: it.title || "",
-              author: it.author || "",
-              id: it.id || "",
-              key: it._key || "",
-              // עוזר לזהות: גם הכותרת/מחבר + רמזים "חשודים"
-              hints: [it.title || "", it.author || "", ...hints].filter(Boolean).slice(0, 60),
-              normTitle: normalizeKey(it.title || ""),
-              candidates: (() => {
-                const nt = normalizeKey(it.title || "")
-                if (!nt || !lastMaps) return []
-                const a = (lastMaps.stemNormToPaths && lastMaps.stemNormToPaths.get(nt)) || []
-                // אם אין כלום לפי stem, ננסה לפי baseNorm (לעיתים metadata מכיל שם קובץ)
-                const b = (a.length ? a : (lastMaps.baseNormToPaths && lastMaps.baseNormToPaths.get(nt)) || [])
-                return Array.isArray(b) ? b.slice(0, 20) : []
-              })(),
-              reason: (() => {
-                const nt = normalizeKey(it.title || "")
-                if (!nt || !lastMaps) return "no_maps"
-                const a = (lastMaps.stemNormToPaths && lastMaps.stemNormToPaths.get(nt)) || []
-                const b = (a.length ? a : (lastMaps.baseNormToPaths && lastMaps.baseNormToPaths.get(nt)) || [])
-                const n = Array.isArray(b) ? b.length : 0
-                if (n === 0) return "no_match"
-                if (n === 1) return "single_suggestion"
-                return "ambiguous"
-              })()
-            }
+        elCount.textContent = String(total)
+        elFiltered.textContent = String(count)
+
+        const start = (state.page - 1) * PAGE_SIZE
+        const pageItems = state.filtered.slice(start, start + PAGE_SIZE)
+
+        for (const it of pageItems) {
+          const row = document.createElement("a")
+          row.className = "item"
+          row.href = `/file?file=${encodeURIComponent(it.id)}`
+          row.addEventListener("click", (e) => {
+            e.preventDefault()
+            history.pushState({}, "", row.href)
+            showFile(it)
           })
 
-        const payload = {
-          generatedAt: new Date().toISOString(),
-          total: missing.length,
-          items: missing
-        }
-
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" })
-        const a = document.createElement("a")
-        a.href = URL.createObjectURL(blob)
-        a.download = "missing_no_file.json"
-        document.body.appendChild(a)
-        a.click()
-        a.remove()
-        setTimeout(() => URL.revokeObjectURL(a.href), 5000)
-      }
-
-      // נרמול שמות לצורך התאמות "רופפות" (פיסוק/מרכאות/קידודים שונים)
-            // decodeURIComponent אך לא קורס על מחרוזות "מלוכלכות" (למשל % לא תקין)
-      function safeDecodeURIComponent(s) {
-        const x = String(s ?? "")
-        try {
-          return decodeURIComponent(x)
-        } catch (e) {
-          // אם יש % לא תקין – ננסה קודם לאלף אותו ואז לפענח
-          try {
-            const fixed = x.replace(/%(?![0-9A-Fa-f]{2})/g, "%25")
-            return decodeURIComponent(fixed)
-          } catch (e2) {
-            return x
-          }
-        }
-      }
-
-      // קידוד URL "קשיח" שגם מקודד תווים ש-encodeURIComponent לעיתים משאיר (כמו ')
-      function encodeURIComponentStrict(s) {
-        return encodeURIComponent(String(s))
-          .replace(/'/g, "%27")
-          .replace(/\(/g, "%28")
-          .replace(/\)/g, "%29")
-          .replace(/\*/g, "%2A")
-      }
-
-      // מקודד רכיב אך שומר על %XX קיימים (מונע double-encode ל-%25)
-      function encodePreservePct(s, encoder) {
-        const x = String(s ?? "")
-        // מחליף כל %XX בטוקן שלא יקודד, ואז מחזיר
-        const tokenized = x.replace(/%([0-9A-Fa-f]{2})/g, "~P$1~")
-        const enc = encoder(tokenized)
-        return enc.replace(/~P([0-9A-Fa-f]{2})~/g, "%$1")
-      }
-
-function normalizeKey(s) {
-        let x = safeDecodeURIComponent(String(s ?? ""))
-        try { x = x.normalize("NFKD") } catch (e) {}
-        x = x
-          .replace(/%22/gi, '"')
-          .replace(/["״׳'`´“”‘’]/g, "")
-          .replace(/[^\p{L}\p{N}]+/gu, " ")
-          .replace(/\s+/g, " ")
-          .trim()
-          .toLowerCase()
-        return x
-      }
-
-function applySearch() {
-        const q = document.getElementById("q").value.trim().toLowerCase()
-        const fileMode = document.getElementById("fileMode").value
-        const searchAllCats = document.getElementById("searchAllCats").checked
-
-        let base = items
-        if (fileMode === "with") base = base.filter(it => it.path)
-        else if (fileMode === "without") base = base.filter(it => !it.path)
-
-        let scoped = base
-        // כשיש קטגוריה נבחרת:
-        // - אם אין חיפוש -> מסננים לפי קטגוריה
-        // - אם יש חיפוש:
-        //   - אם "חיפוש בכל הקטגוריות" דלוק -> לא מסננים לפי קטגוריה
-        //   - אחרת -> מסננים לפי קטגוריה
-        const hasCat = selectedCategorySegs && selectedCategorySegs.length
-        if (hasCat && (!q || !searchAllCats)) {
-          scoped = scoped.filter(it => hasCategoryPrefix(it, selectedCategorySegs))
-        }
-
-        currentList = q ? scoped.filter(it => (it.q || "").includes(q)) : scoped
-
-        clearResults()
-        renderNextPage()
-        updateHeaderStats(q, fileMode, searchAllCats)
-      }
-
-      function updateHeaderStats(q, fileMode, searchAllCats) {
-        const withPath = items.filter(it => it.path).length
-        const withoutPath = items.length - withPath
-        const modeLabel = (fileMode === "with") ? "רק עם קובץ" : (fileMode === "without") ? "רק בלי קובץ" : "הכל"
-        const catLabel = selectedCategorySegs && selectedCategorySegs.length ? selectedCategorySegs.join(" / ") : "הכל"
-        const scope = (q && searchAllCats) ? "כל הקטגוריות" : catLabel
-
-        document.getElementById("scopeHint").textContent =
-          `תחום: ${scope} | מצב: ${modeLabel} | מוצג: ${currentList.length} | סה"כ: ${items.length} | עם קובץ: ${withPath} | בלי קובץ: ${withoutPath}`
-
-        document.getElementById("resultsTitle").textContent =
-          q ? `תוצאות חיפוש (${currentList.length})` : `תוצאות (${currentList.length})`
-      }
-
-      function clearResults() {
-        document.getElementById("results").innerHTML = ""
-        renderCursor = 0
-      }
-
-      function renderNextPage() {
-        const results = document.getElementById("results")
-        const end = Math.min(renderCursor + PAGE_SIZE, currentList.length)
-
-        for (let i = renderCursor; i < end; i++) {
-          const it = currentList[i]
-
-          const card = document.createElement("div")
-          card.className = "card"
-
+          const left = document.createElement("div")
           const t = document.createElement("div")
           t.className = "title"
-          t.textContent = it.title || "(ללא כותרת)"
+          t.textContent = it.title || guessTitleFromPath(it.path)
 
-          const m = document.createElement("div")
-          m.className = "meta"
-          m.textContent = it.author || ""
+          const meta = document.createElement("div")
+          meta.className = "meta"
 
-          const p = document.createElement("div")
-          p.className = "path"
-          p.textContent = it.path || ""
+          const segs = Array.isArray(it.cat) ? it.cat : computeCategoryFromPath(it.path)
+          const cat = joinCrumbs(segs)
+          if (cat) meta.appendChild(makeTag("קטגוריה", cat))
+          if (it.author) meta.appendChild(makeTag("מחבר", it.author))
+          if (it.source) meta.appendChild(makeTag("מקור", it.source))
+          if (Array.isArray(it.tags) && it.tags.length) meta.appendChild(makeTag("תגיות", it.tags.slice(0, 6).join(", ")))
 
-          const actions = document.createElement("div")
-          actions.className = "actions"
+          left.appendChild(t)
+          left.appendChild(meta)
 
-          const b1 = document.createElement("button")
-          b1.className = "btnSmall"
-          b1.textContent = "פתח בטאב"
-          b1.onclick = (e) => { e.stopPropagation(); openInNewTab(it.path) }
+          const right = document.createElement("div")
+          right.className = "badge"
+          right.textContent = it.path.split("/").pop()
 
-          const b2 = document.createElement("button")
-          b2.className = "btnSmall"
-          b2.textContent = "צפה כאן"
-          b2.onclick = (e) => { e.stopPropagation(); viewInline(it.path) }
-
-          const b3 = document.createElement("button")
-          b3.className = "btnSmall"
-          b3.textContent = "פתח קטגוריה"
-          b3.onclick = (e) => {
-            e.stopPropagation()
-            const segs = Array.isArray(it.cat) ? it.cat : computeCategoryFromPath(it.path)
-            if (segs.length) selectCategory(segs)
-            else clearCategory()
-          }
-
-          actions.appendChild(b1)
-          actions.appendChild(b2)
-          actions.appendChild(b3)
-
-          card.appendChild(t)
-          card.appendChild(m)
-          if (it.path) card.appendChild(p)
-          card.appendChild(actions)
-
-          card.onclick = () => openInNewTab(it.path)
-
-          results.appendChild(card)
+          row.appendChild(left)
+          row.appendChild(right)
+          elList.appendChild(row)
         }
 
-        renderCursor = end
+        renderPager()
       }
 
-      function afterCatalogLoaded() {
-        // ברירת מחדל: לפתוח כמה קטגוריות ראשיות כדי שיהיה נוח
-        categoryRoot = buildCategoryTree(items)
-        expandedCategoryKeys = new Set()
-        const top = Array.from(categoryRoot.children.values())
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 8)
-        for (const n of top) expandedCategoryKeys.add(catKey(n.segs))
+      function makeTag(k, v) {
+        const span = document.createElement("span")
+        span.className = "tag"
+        span.innerHTML = `<b>${escapeHtml(k)}:</b> ${escapeHtml(v)}`
+        return span
+      }
 
-        renderCategories()
-        applySearch()
+      function renderPager() {
+        const total = state.filtered.length
+        const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+        state.page = Math.min(state.page, pages)
 
-        // Infinite scroll
-        window.onscroll = () => {
-          if (renderCursor >= currentList.length) return
-          const nearBottom = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 500)
-          if (nearBottom) renderNextPage()
+        const cat = state.selectedCat && state.selectedCat.length ? `קטגוריה: ${joinCrumbs(state.selectedCat)}` : "ללא סינון"
+
+        elFooter.innerHTML = ""
+        const box = document.createElement("div")
+        box.className = "muted"
+        box.style.display = "flex"
+        box.style.justifyContent = "space-between"
+        box.style.alignItems = "center"
+        box.style.gap = "10px"
+        box.style.flexWrap = "wrap"
+
+        const left = document.createElement("div")
+        left.textContent = `${cat} | עמוד ${state.page} מתוך ${pages}`
+
+        const right = document.createElement("div")
+        right.style.display = "flex"
+        right.style.gap = "8px"
+        right.style.alignItems = "center"
+        right.style.flexWrap = "wrap"
+
+        const prev = document.createElement("button")
+        prev.textContent = "הקודם"
+        prev.disabled = state.page <= 1
+        prev.addEventListener("click", () => {
+          state.page = Math.max(1, state.page - 1)
+          renderList()
+        })
+
+        const next = document.createElement("button")
+        next.textContent = "הבא"
+        next.disabled = state.page >= pages
+        next.addEventListener("click", () => {
+          state.page = Math.min(pages, state.page + 1)
+          renderList()
+        })
+
+        const clearCat = document.createElement("button")
+        clearCat.textContent = "איפוס קטגוריה"
+        clearCat.disabled = !(state.selectedCat && state.selectedCat.length)
+        clearCat.addEventListener("click", () => {
+          state.selectedCat = []
+          state.page = 1
+          applyFilters()
+        })
+
+        right.appendChild(prev)
+        right.appendChild(next)
+        right.appendChild(clearCat)
+
+        box.appendChild(left)
+        box.appendChild(right)
+
+        elFooter.appendChild(box)
+      }
+
+      // ----------------------------
+      // File view
+      // ----------------------------
+      function showCatalog() {
+        state.view = "catalog"
+        elViewCatalog.classList.add("active")
+        elViewFile.classList.remove("active")
+      }
+
+      function showFile(it) {
+        state.view = "file"
+        state.file = it
+        elViewCatalog.classList.remove("active")
+        elViewFile.classList.add("active")
+
+        const segs = Array.isArray(it.cat) ? it.cat : computeCategoryFromPath(it.path)
+
+        elCrumbs.innerHTML = ""
+        const rootA = document.createElement("a")
+        rootA.href = "/"
+        rootA.textContent = "קטלוג"
+        rootA.addEventListener("click", (e) => {
+          e.preventDefault()
+          history.pushState({}, "", "/")
+          showCatalog()
+        })
+        elCrumbs.appendChild(rootA)
+
+        for (const s of segs) {
+          const sep = document.createElement("span")
+          sep.className = "sep"
+          sep.textContent = "›"
+          elCrumbs.appendChild(sep)
+
+          const a = document.createElement("a")
+          a.href = "#"
+          a.textContent = s
+          a.addEventListener("click", (e) => {
+            e.preventDefault()
+            state.selectedCat = segs.slice(0, segs.indexOf(s) + 1)
+            history.pushState({}, "", "/")
+            showCatalog()
+            applyFilters()
+          })
+          elCrumbs.appendChild(a)
+        }
+
+        elFileTitle.textContent = it.title || guessTitleFromPath(it.path)
+
+        const meta = []
+        if (it.author) meta.push(makeTag("מחבר", it.author))
+        if (it.source) meta.push(makeTag("מקור", it.source))
+        if (Array.isArray(it.tags) && it.tags.length) meta.push(makeTag("תגיות", it.tags.join(", ")))
+        meta.push(makeTag("נתיב", it.path))
+        elFileMeta.innerHTML = ""
+        for (const t of meta) elFileMeta.appendChild(t)
+
+        loadFileContent(it)
+      }
+
+      async function loadFileContent(it) {
+        elFileContent.textContent = "טוען…"
+        const url = `${API_LIB}/${encodeURI(it.path)}`
+        elFileFooter.textContent = url
+
+        try {
+          const r = await fetch(url, { method: "GET" })
+          if (!r.ok) throw new Error(`Fetch failed: ${r.status}\n${url}`)
+          const text = await r.text()
+          elFileContent.textContent = text
+        } catch (err) {
+          elFileContent.textContent = String(err?.message || err)
         }
       }
 
-      // =========================
-      // Boot
-      // =========================
-      document.addEventListener("DOMContentLoaded", () => {
-        // טוען אוטומטית (מטמון אם קיים)
-        refreshCatalog(false)
-      })
+      function findById(id) {
+        return state.items.find((x) => x.id === id) || null
+      }
+
+      function renderInfoBox() {
+        const total = state.items.length
+        const hasMetaByPath = !!state.meta?.byPath
+        const hasMetaById = !!state.meta?.byId
+        const metaHint =
+          hasMetaByPath || hasMetaById
+            ? "metadata.json: נמצא"
+            : "metadata.json: לא נמצא (עדיין אפשר לעבוד עם manifest בלבד)"
+        elInfoBox.textContent = `קבצים: ${total} | ${metaHint}`
+      }
+
+      // Init
+      loadAll({ force: false })
+      route(location.pathname + location.search)
     </script>
   </body>
 </html>
