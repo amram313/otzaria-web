@@ -7,43 +7,44 @@ export async function onRequest(context) {
   const REPO = env?.LIB_REPO || "otzaria-library"
   const BRANCH = env?.LIB_BRANCH || "main"
 
-  // Route: /lib/<anything...>
+  // Preserve any existing percent-encoding in the path to avoid double-encoding
+  // and to support filenames that contain quotes and other special characters.
+  // Route: /lib or /lib/<anything...>
   const pathname = url.pathname || ""
   if (pathname === "/lib" || pathname === "/lib/") {
     return new Response("Missing file path", { status: 400 })
   }
 
-  // Preserve any existing percent-encoding in the path to avoid double-encoding
-  // and to support filenames that contain quotes and other special characters.
   let rel = pathname.replace(/^\/lib\/?/, "")
-
   // Basic hardening
   if (!rel || rel.startsWith("/")) return new Response("Bad path", { status: 400 })
 
   const safeDecode = (s) => {
-    try {
-      return decodeURIComponent(s)
-    } catch (_) {
-      return s
-    }
+    try { return decodeURIComponent(s) } catch (_) { return s }
   }
 
   // Prevent traversal after decoding
   const decodedForCheck = rel.split("/").map(safeDecode).join("/")
   if (decodedForCheck.includes("..")) return new Response("Bad path", { status: 400 })
 
-  const primaryUrl = `https://raw.githubusercontent.com/${OWNER}/${REPO}/refs/heads/${BRANCH}/${rel}`
-  const cdnUrl = `https://cdn.jsdelivr.net/gh/${OWNER}/${REPO}@${BRANCH}/${rel}`
+  // IMPORTANT: The library repo stores files at the repository root paths.
+  // Do NOT prefix with "/lib/" on the upstream URL.
+  const upstreamUrl =
+    `https://raw.githubusercontent.com/${OWNER}/${REPO}/refs/heads/${BRANCH}/${rel}`
+
+  // Fallback CDN (often avoids GitHub raw rate limits)
+  const cdnUrl =
+    `https://cdn.jsdelivr.net/gh/${OWNER}/${REPO}@${BRANCH}/${rel}`
 
   const cacheKey = new Request(
-    url.toString() + (url.search ? "&" : "?") + "up=" + encodeURIComponent(primaryUrl),
+    url.toString() + (url.search ? "&" : "?") + "up=" + encodeURIComponent(upstreamUrl),
     request
   )
 
   const cached = await caches.default.match(cacheKey)
   if (cached) return cached
 
-  // Forward only a small set of headers (mainly for range/conditional requests)
+  // Forward only a small set of headers (range + conditional requests)
   const forwardHeaders = new Headers()
   for (const h of ["range", "if-none-match", "if-modified-since"]) {
     const v = request.headers.get(h)
@@ -52,12 +53,12 @@ export async function onRequest(context) {
 
   const method = request.method === "HEAD" ? "GET" : request.method
 
-  let r = await fetch(primaryUrl, {
+  let r = await fetch(upstreamUrl, {
     method,
     headers: forwardHeaders,
   })
 
-  // Fallback to CDN when GitHub RAW rate-limits or has a transient failure
+  // Retry via CDN on typical GitHub RAW failures / rate limits
   if (!r.ok && (r.status === 403 || r.status === 429 || r.status >= 500)) {
     r = await fetch(cdnUrl, {
       method,
@@ -66,13 +67,9 @@ export async function onRequest(context) {
   }
 
   if (!r.ok) {
+    // Return the real upstream status (not a generic 502)
     let body = ""
-    try {
-      body = await r.text()
-    } catch (_) {
-      body = ""
-    }
-
+    try { body = await r.text() } catch (_) { body = "" }
     return new Response(body || `Upstream error: ${r.status}`, {
       status: r.status,
       headers: {
