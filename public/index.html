@@ -569,30 +569,36 @@
         const seen = new Set()
 
         function push(v) {
-          const s = String(v ?? "").trim()
+          const s = String(v || "").trim()
           if (!s) return
+          if (s.length > 500) return
           if (seen.has(s)) return
           seen.add(s)
           out.push(s)
         }
 
-        function walk(v, depth) {
+        function walk(node, depth) {
           if (out.length >= maxItems) return
           if (depth > maxDepth) return
-          if (v == null) return
+          if (node == null) return
 
-          if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
-            push(v)
+          const t = typeof node
+          if (t === "string" || t === "number" || t === "boolean") {
+            push(node)
             return
           }
-          if (Array.isArray(v)) {
-            for (const x of v) walk(x, depth + 1)
+          if (Array.isArray(node)) {
+            for (let i = 0; i < node.length; i++) {
+              walk(node[i], depth + 1)
+              if (out.length >= maxItems) return
+            }
             return
           }
-          if (typeof v === "object") {
-            for (const [k, x] of Object.entries(v)) {
+          if (t === "object") {
+            for (const [k, v] of Object.entries(node)) {
               push(k)
-              walk(x, depth + 1)
+              walk(v, depth + 1)
+              if (out.length >= maxItems) return
             }
           }
         }
@@ -614,14 +620,18 @@
       function looksLikeHashish(s) {
         const x = String(s || "").trim()
         if (!x) return false
-        const y = x.replaceAll("-", "").replaceAll("_", "")
-        return /^[a-f0-9]{16,128}$/i.test(y)
+        if (/^[0-9a-f]{32}$/i.test(x)) return true
+        if (/^[0-9a-f]{40}$/i.test(x)) return true
+        if (/^[0-9a-f]{64}$/i.test(x)) return true
+        if (/^(sha1|sha256|md5):[0-9a-f]{16,64}$/i.test(x)) return true
+        return false
       }
 
       function normHashish(s) {
-        const x = String(s || "").trim().toLowerCase()
+        const x = String(s || "").trim()
         if (!x) return ""
-        return x.replaceAll("-", "").replaceAll("_", "")
+        const m = x.match(/^(sha1|sha256|md5):(.+)$/i)
+        return (m && m[2] ? m[2] : x).toLowerCase()
       }
 
       function basenameOf(p) {
@@ -725,10 +735,10 @@
       }
 
       function pathFromItemUsingMaps(item, maps) {
-        if (!item) return ""
-        if (item.path) return item.path
+        if (looksLikePath(item.path)) return item.path
 
-        const strings = deepCollectStrings(item._raw, 6, 400)
+        const strings = deepCollectStrings(item._raw, 5, 220)
+
         for (const s of strings) {
           if (!looksLikeHashish(s)) continue
           const h = normHashish(s)
@@ -849,11 +859,9 @@
           let fixed = 0
           for (let i = 0; i < normalized.length; i++) {
             const it = normalized[i]
-            if (!it.path) {
-              const p = pathFromItemUsingMaps(it, maps)
-              if (p) { it.path = p; fixed++ }
-            }
-            if (i % 3000 === 0) {
+            const p = pathFromItemUsingMaps(it, maps)
+            if (p && p !== it.path) { it.path = p; fixed++ }
+if (i % 3000 === 0) {
               setStatus(`מצמיד נתיבים... (${i}/${normalized.length})`)
               await tick()
             }
