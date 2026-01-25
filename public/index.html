@@ -697,21 +697,30 @@
             const st = stemOfFilename(b).toLowerCase()
             if (b && !baseToPath.has(b)) baseToPath.set(b, path)
             if (st && !stemToPath.has(st)) stemToPath.set(st, path)
+
+            if (looksLikeHashish(kStr)) {
+              const hk = normHashish(kStr)
+              if (hk && !hashToPath.has(hk)) hashToPath.set(hk, path)
+            }
+            for (const s of vStrings) {
+              if (looksLikeHashish(s)) {
+                const hv = normHashish(s)
+                if (hv && !hashToPath.has(hv)) hashToPath.set(hv, path)
+              }
+              const bb = basenameOf(s).toLowerCase()
+              const sst = stemOfFilename(bb).toLowerCase()
+              if (bb && !baseToPath.has(bb)) baseToPath.set(bb, path)
+              if (sst && !stemToPath.has(sst)) stemToPath.set(sst, path)
+            }
           }
 
-          const candidates = [kStr, ...vStrings]
-          for (const s of candidates) {
-            if (!looksLikeHashish(s)) continue
-            const h = normHashish(s)
-            if (h && !hashToPath.has(h) && path) hashToPath.set(h, path)
-          }
-
-          if (onProgress && (i % 5000 === 0 || i === total - 1)) {
-            onProgress(i + 1, total)
+          if (i % 5000 === 0) {
+            if (onProgress) onProgress(i, total)
             await tick()
           }
         }
 
+        if (onProgress) onProgress(total, total)
         return { hashToPath, baseToPath, stemToPath }
       }
 
