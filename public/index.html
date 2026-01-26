@@ -741,6 +741,8 @@
           }
 
           if (!path) continue
+          // שלב 1: להציג רק קבצי טקסט (.txt)
+          if (!/\.txt$/i.test(path)) continue
           if (seen.has(path)) continue
           seen.add(path)
 
@@ -1010,7 +1012,7 @@
           setStatus(`מצמיד נתיבים... (${normalized.length}/${normalized.length})`)
 
           // ממזגים לתוך הרשימה גם את כל הקבצים שמופיעים ב־files_manifest.json
-          setStatus("ממזג פריטים מתוך ה־manifest...")
+          setStatus("ממזג פריטי TXT מתוך ה־manifest...")
           const manifestItems = buildItemsFromManifest(manifestJson)
 
           const normP = (p) => String(p || "")
@@ -1039,7 +1041,8 @@
             }
           }
 
-          const merged = Array.from(byPath.values())
+          // שלב 1: להציג רק קבצי טקסט (.txt)
+          const merged = Array.from(byPath.values()).filter(it => /\.txt$/i.test(String(it.path || "")))
           setStatus(`בונה רשימה סופית... | נוספו מה־manifest: ${addedFromManifest}`)
 
           // בניית שדה חיפוש + קטגוריות (לפי נתיב תיקיות)
