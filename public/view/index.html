@@ -1295,7 +1295,10 @@ pre{ white-space:pre-wrap; }`
         currentPlainText = ""
         currentTocItems = []
 
-        meta.textContent = "קובץ: " + (String(path).replaceAll("\", "/").split("/").filter(Boolean).slice(-1)[0] || path)btnRaw.onclick = () => {
+        meta.textContent = "קובץ: " + (String(path).replaceAll("\\", "/").split("/").filter(Boolean).slice(-1)[0] || path)
+
+        btnRaw.onclick = () => {
+
           const u = "/lib/" + encodePath(path)
           window.open(u, "_blank", "noopener,noreferrer")
         }
