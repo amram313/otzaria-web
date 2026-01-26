@@ -11,7 +11,7 @@
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
   <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
   <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
@@ -32,26 +32,13 @@
       }
 
       function docxDocumentRelsXml() {
+        // hyperlinks in-document use r:id for external; for internal anchors, we don't need rels
         return (
 `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-  <Relationship Id="rIdSettings" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
 </Relationships>`
-        )
-      }
-
-      function docxSettingsXml() {
-        // This is the piece that usually fixes "Word still LTR"
-        return (
-`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:mirrorMargins/>
-  <w:rtlGutter/>
-  <w:themeFontLang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/>
-  <w:bidi/>
-  <w:bidiVis/>
-</w:settings>`
         )
       }
 
@@ -63,7 +50,7 @@
     <w:name w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:jc w:val="right"/><w:bidi/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/></w:rPr>
+    <w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial" w:bidi="Arial"/><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/></w:rPr>
   </w:style>
 
   <w:style w:type="paragraph" w:styleId="Heading1">
@@ -72,7 +59,7 @@
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="240" w:after="80"/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="48"/><w:szCs w:val="48"/></w:rPr>
+    <w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial" w:bidi="Arial"/><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="48"/><w:szCs w:val="48"/></w:rPr>
   </w:style>
 
   <w:style w:type="paragraph" w:styleId="Heading2">
@@ -81,7 +68,7 @@
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="200" w:after="70"/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="40"/><w:szCs w:val="40"/></w:rPr>
+    <w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial" w:bidi="Arial"/><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="40"/><w:szCs w:val="40"/></w:rPr>
   </w:style>
 
   <w:style w:type="paragraph" w:styleId="Heading3">
@@ -90,7 +77,7 @@
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="180" w:after="60"/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="34"/><w:szCs w:val="34"/></w:rPr>
+    <w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial" w:bidi="Arial"/><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="34"/><w:szCs w:val="34"/></w:rPr>
   </w:style>
 
   <w:style w:type="paragraph" w:styleId="Heading4">
@@ -99,31 +86,29 @@
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="160" w:after="50"/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="30"/><w:szCs w:val="30"/></w:rPr>
+    <w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial" w:bidi="Arial"/><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="30"/><w:szCs w:val="30"/></w:rPr>
   </w:style>
 
   <w:style w:type="character" w:styleId="Hyperlink">
     <w:name w:val="Hyperlink"/>
     <w:uiPriority w:val="99"/>
     <w:unhideWhenUsed/>
-    <w:rPr><w:color w:val="0000FF"/><w:u w:val="single"/><w:rtl/><w:lang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/></w:rPr>
+    <w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial" w:bidi="Arial"/><w:color w:val="0000FF"/><w:u w:val="single"/><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/></w:rPr>
   </w:style>
 </w:styles>`
         )
       }
 
-      function docxCoreXml(title) {
-        const nowIso = new Date().toISOString()
+      function docxSettingsXml() {
+        // Stronger RTL defaults (helps even when viewer ignores some bidi flags)
         return (
 `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
-  xmlns:dc="http://purl.org/dc/elements/1.1/"
-  xmlns:dcterms="http://purl.org/dc/terms/"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>${docxXmlEscape(title)}</dc:title>
-  <dc:language>he-IL</dc:language>
-  <dcterms:created xsi:type="dcterms:W3CDTF">${nowIso}</dcterms:created>
-</cp:coreProperties>`
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:mirrorMargins/>
+  <w:rtlGutter/>
+  <w:themeFontLang w:val="he-IL" w:bidi="he-IL"/>
+  <w:bidi/>
+</w:settings>`
         )
       }
 
@@ -131,106 +116,42 @@
         return (
 `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
-  xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>otzaria-web</Application>
+            xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>Otzaria Web</Application>
 </Properties>`
         )
       }
 
-      function normalizeSpacesKeepNewlines(s) {
-        const x = String(s || "").replace(/\r\n/g, "\n")
-        return x
-          .replace(/[ \t]+\n/g, "\n")
-          .replace(/\n[ \t]+/g, "\n")
-      }
-
-      function splitToParagraphs(text) {
-        const t = normalizeSpacesKeepNewlines(text)
-        const parts = t.split(/\n\s*\n+/g)
-        return parts
-          .map(p => p.replace(/\n+/g, " ").trim())
-          .filter(p => p.length > 0)
-      }
-
-      function textFromNode(node) {
-        let out = ""
-        function walk(n) {
-          if (!n) return
-          if (n.nodeType === Node.TEXT_NODE) {
-            out += n.nodeValue || ""
-            return
-          }
-          if (n.nodeType === Node.ELEMENT_NODE) {
-            const tag = (n.tagName || "").toUpperCase()
-            if (tag === "BR") { out += " "; return }
-            if (tag === "SCRIPT" || tag === "STYLE") return
-            for (const c of Array.from(n.childNodes || [])) walk(c)
-          }
-        }
-        walk(node)
-        return out
-      }
-
-      function collectBlocksForDocx(root) {
-        const blocks = []
-        let buffer = ""
-
-        function flush() {
-          const paras = splitToParagraphs(buffer)
-          paras.forEach((p) => blocks.push({ type: "p", text: p }))
-          buffer = ""
-        }
-
-        function walk(node) {
-          if (!node) return
-          if (node.nodeType === Node.TEXT_NODE) {
-            buffer += node.nodeValue || ""
-            return
-          }
-          if (node.nodeType !== Node.ELEMENT_NODE) return
-
-          const tag = (node.tagName || "").toUpperCase()
-
-          if (tag === "H1" || tag === "H2" || tag === "H3" || tag === "H4") {
-            flush()
-            const lvl = Number(tag.slice(1))
-            const t = (node.textContent || "").replace(/\s+/g, " ").trim()
-            if (t) blocks.push({ type: "h", level: lvl, text: t })
-            return
-          }
-
-          if (tag === "P" || tag === "BLOCKQUOTE" || tag === "PRE") {
-            flush()
-            const t = textFromNode(node).replace(/\s+/g, " ").trim()
-            if (t) blocks.push({ type: "p", text: t })
-            return
-          }
-
-          if (tag === "LI") {
-            flush()
-            const t = textFromNode(node).replace(/\s+/g, " ").trim()
-            if (t) blocks.push({ type: "p", text: "• " + t })
-            return
-          }
-
-          for (const c of Array.from(node.childNodes || [])) walk(c)
-          if (tag === "DIV" || tag === "SECTION" || tag === "ARTICLE") buffer += "\n\n"
-        }
-
-        walk(root)
-        flush()
-        return blocks
-      }
-
-      function docxRun(text, opts) {
-        const o = opts || {}
-        const rtl = "<w:rtl/>"
-        const lang = "<w:lang w:val=\"he-IL\" w:bidi=\"he-IL\"/>"
-        const b = o.bold ? "<w:b/>" : ""
-        const rStyle = o.rStyle ? "<w:rStyle w:val=\"" + o.rStyle + "\"/>" : ""
+      function docxCoreXml(title) {
+        const t = String(title || "מסמך")
+        const now = new Date().toISOString()
         return (
-          "<w:r><w:rPr>" + rtl + lang + b + rStyle + "</w:rPr>" +
-          "<w:t xml:space=\"preserve\">" + docxXmlEscape(text) + "</w:t></w:r>"
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+                   xmlns:dc="http://purl.org/dc/elements/1.1/"
+                   xmlns:dcterms="http://purl.org/dc/terms/"
+                   xmlns:dcmitype="http://purl.org/dc/dcmitype/"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>${docxXmlEscape(t)}</dc:title>
+  <dc:creator>Otzaria Web</dc:creator>
+  <cp:lastModifiedBy>Otzaria Web</cp:lastModifiedBy>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified>
+</cp:coreProperties>`
+        )
+      }
+
+      function docxPageBreak() {
+        return "<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>"
+      }
+
+      function docxSectPr() {
+        // A4 + sane margins
+        return (
+`<w:sectPr>
+  <w:pgSz w:w="11906" w:h="16838"/>
+  <w:pgMar w:top="1134" w:right="850" w:bottom="1134" w:left="850" w:header="708" w:footer="708" w:gutter="0"/>
+</w:sectPr>`
         )
       }
 
@@ -242,16 +163,42 @@
         return "<w:pPr>" + style + jc + bidi + spacing + "</w:pPr>"
       }
 
+      function docxRun(text, opts) {
+        const o = opts || {}
+        const rtl = "<w:rtl/>"
+        const lang = "<w:lang w:val=\"he-IL\" w:bidi=\"he-IL\"/>"
+        const fonts = "<w:rFonts w:ascii=\"Arial\" w:hAnsi=\"Arial\" w:cs=\"Arial\" w:bidi=\"Arial\"/>"
+        const b = o.bold ? "<w:b/>" : ""
+        const rStyle = o.rStyle ? "<w:rStyle w:val=\"" + o.rStyle + "\"/>" : ""
+
+        let t = String(text ?? "")
+        // Force RTL even in viewers that ignore OOXML bidi flags (RLM prefix)
+        if (/[\u0590-\u05FF]/.test(t)) t = "\u200F" + t
+
+        return (
+          "<w:r><w:rPr>" + fonts + rtl + lang + b + rStyle + "</w:rPr>" +
+          "<w:t xml:space=\"preserve\">" + docxXmlEscape(t) + "</w:t></w:r>"
+        )
+      }
+
       function docxPara(pStyle, text, bold) {
         return "<w:p>" + docxPPr(pStyle, 80) + docxRun(text, { bold: !!bold }) + "</w:p>"
       }
 
       function docxBookmarkStart(id, name) {
-        return "<w:bookmarkStart w:id=\"" + id + "\" w:name=\"" + docxXmlEscape(name) + "\"/>"
+        return "<w:bookmarkStart w:id=\"" + String(id) + "\" w:name=\"" + docxXmlEscape(name) + "\"/>"
+      }
+      function docxBookmarkEnd(id) {
+        return "<w:bookmarkEnd w:id=\"" + String(id) + "\"/>"
       }
 
-      function docxBookmarkEnd(id) {
-        return "<w:bookmarkEnd w:id=\"" + id + "\"/>"
+      function docxHyperlinkAnchor(anchor, text) {
+        // internal anchor hyperlink (no rel needed)
+        return (
+          "<w:hyperlink w:anchor=\"" + docxXmlEscape(anchor) + "\" w:history=\"1\">" +
+            docxRun(text, { rStyle: "Hyperlink" }) +
+          "</w:hyperlink>"
+        )
       }
 
       function docxHeadingWithBookmark(level, text, bmId, bmName) {
@@ -265,23 +212,6 @@
             docxBookmarkEnd(bmId) +
           "</w:p>"
         )
-      }
-
-      function docxHyperlinkAnchor(anchorName, label) {
-        return (
-          "<w:hyperlink w:anchor=\"" + docxXmlEscape(anchorName) + "\" w:history=\"1\">" +
-            docxRun(label, { rStyle: "Hyperlink" }) +
-          "</w:hyperlink>"
-        )
-      }
-
-      function docxPageBreak() {
-        return "<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>"
-      }
-
-      function docxSectPr() {
-        // rtlGutter inside section
-        return "<w:sectPr><w:rtlGutter/></w:sectPr>"
       }
 
       function docxOneLineTocParagraph(tocEntries) {
@@ -302,6 +232,7 @@
         return p
       }
 
+      // ---------- Export: DOCX ----------
       async function exportDocxFull() {
         if (!requireJSZip()) return
 
