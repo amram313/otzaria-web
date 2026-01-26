@@ -299,6 +299,7 @@
       let currentSafeHtml = ""
       let currentPlainText = ""
       let currentTocItems = [] // [{id,label,level}]
+      let commUI = null
 
       function encodePath(path){
         return String(path).split("/").filter(Boolean).map(encodeURIComponent).join("/")
@@ -623,35 +624,54 @@ function showExportButtonsForHtmlOrText() {
         const btnCommClose = document.getElementById("btnCommClose")
         const btnCommRaw = document.getElementById("btnCommRaw")
 
-        commUI = {
-          btnComms,
-          splitWrap,
-          txtLines,
-          commPanel,
-          commSel,
-          commMode,
-          commMeta,
-          commBody,
-          btnCommClose,
-          btnCommRaw,
-        }
+        const hasCommsUi = !!(
+          btnComms &&
+          splitWrap &&
+          txtLines &&
+          commPanel &&
+          commSel &&
+          commMode &&
+          commMeta &&
+          commBody &&
+          btnCommClose &&
+          btnCommRaw
+        )
 
-        // Reset panes
-        btnComms.style.display = "none"
-        splitWrap.style.display = "none"
-        commPanel.style.display = "none"
+        if (hasCommsUi) {
+          commUI = {
+            btnComms,
+            splitWrap,
+            txtLines,
+            commPanel,
+            commSel,
+            commMode,
+            commMeta,
+            commBody,
+            btnCommClose,
+            btnCommRaw,
+          }
 
-        btnComms.onclick = () => {
-          if (commPanel.style.display === "none") {
-            commPanel.style.display = "flex"
-            syncCommentaryToMain(true)
-          } else {
+          // Reset panes
+          btnComms.style.display = "none"
+          splitWrap.style.display = "none"
+          commPanel.style.display = "none"
+
+          btnComms.onclick = () => {
+            if (commPanel.style.display === "none") {
+              commPanel.style.display = "flex"
+              if (typeof syncCommentaryToMain === "function") syncCommentaryToMain(true)
+            } else {
+              commPanel.style.display = "none"
+            }
+          }
+
+          btnCommClose.onclick = () => {
             commPanel.style.display = "none"
           }
+        } else {
+          commUI = null
         }
-        btnCommClose.onclick = () => {
-          commPanel.style.display = "none"
-        }
+
 
         if (!path){
           loading.style.display = "none"
@@ -716,9 +736,11 @@ function showExportButtonsForHtmlOrText() {
           showExportButtonsForHtmlOrText()
 
           const enableComms =
-            isTxt(path) &&
+            !!commUI &&
+            /\.txt$/i.test(path || "") &&
             !String(path).includes("/מפרשים/") &&
             !String(path).includes("/links/")
+
 
           if (enableComms) {
             // Split view: מקור + מפרשים
