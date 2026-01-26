@@ -611,6 +611,47 @@ function showExportButtonsForHtmlOrText() {
         const err = document.getElementById("err")
         const pdf = document.getElementById("pdf")
         const btnRaw = document.getElementById("btnRaw")
+        const btnComms = document.getElementById("btnComms")
+        const splitWrap = document.getElementById("splitWrap")
+        const txtLines = document.getElementById("txtLines")
+
+        const commPanel = document.getElementById("commPanel")
+        const commSel = document.getElementById("commSel")
+        const commMode = document.getElementById("commMode")
+        const commMeta = document.getElementById("commMeta")
+        const commBody = document.getElementById("commBody")
+        const btnCommClose = document.getElementById("btnCommClose")
+        const btnCommRaw = document.getElementById("btnCommRaw")
+
+        commUI = {
+          btnComms,
+          splitWrap,
+          txtLines,
+          commPanel,
+          commSel,
+          commMode,
+          commMeta,
+          commBody,
+          btnCommClose,
+          btnCommRaw,
+        }
+
+        // Reset panes
+        btnComms.style.display = "none"
+        splitWrap.style.display = "none"
+        commPanel.style.display = "none"
+
+        btnComms.onclick = () => {
+          if (commPanel.style.display === "none") {
+            commPanel.style.display = "flex"
+            syncCommentaryToMain(true)
+          } else {
+            commPanel.style.display = "none"
+          }
+        }
+        btnCommClose.onclick = () => {
+          commPanel.style.display = "none"
+        }
 
         if (!path){
           loading.style.display = "none"
@@ -668,12 +709,32 @@ function showExportButtonsForHtmlOrText() {
             showExportButtonsForHtmlOrText()
           }
         } else {
-          pre.style.display = "block"
+          // תמיד נשמור את הטקסט עבור export
           pre.textContent = text
           currentPlainText = text
           currentTocItems = []
           showExportButtonsForHtmlOrText()
+
+          const enableComms =
+            isTxt(path) &&
+            !String(path).includes("/מפרשים/") &&
+            !String(path).includes("/links/")
+
+          if (enableComms) {
+            // Split view: מקור + מפרשים
+            content.style.display = "none"
+            pre.style.display = "none"
+            splitWrap.style.display = "grid"
+
+            buildMainLines(text)
+            await loadCommentariesList(path)
+          } else {
+            // Plain text (כמו שהיה)
+            splitWrap.style.display = "none"
+            pre.style.display = "block"
+          }
         }
+
       }
 
       
