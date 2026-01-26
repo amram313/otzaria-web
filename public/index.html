@@ -322,7 +322,7 @@
       // Cache settings
       const IDB_DB = "otzaria_catalog"
       const IDB_STORE = "kv"
-      const CATALOG_KEY = "catalog_v1"
+      const CATALOG_KEY = "catalog_v2_manifest"
       const MAX_CATALOG_AGE_MS = 12 * 60 * 60 * 1000 // 12 שעות
 
       // =========================
@@ -696,6 +696,65 @@
         return Object.entries(manifestJson)
       }
 
+
+      function buildItemsFromManifest(manifestJson) {
+        const entries = extractManifestEntries(manifestJson)
+        const seen = new Set()
+        const out = []
+
+        const normalizeManifestPath = (p) => {
+          let s = String(p || "").trim()
+          if (!s) return ""
+          // בתוך /lib/<path> אנחנו תומכים בנתיב רלטיבי לריפו (לא URL מלא)
+          if (s.startsWith("http://") || s.startsWith("https://")) return ""
+          s = s.replace(/^\/+/, "")
+          s = s.replace(/^\.\/+/, "")
+          s = s.replace(/\\/g, "/")
+          return s
+        }
+
+        const safeDecode = (s) => {
+          try { return decodeURIComponent(String(s || "")) } catch (e) { return String(s || "") }
+        }
+
+        const titleFromPath = (p) => {
+          const b = basenameOf(p)
+          const st = stemOfFilename(b)
+          const dec = safeDecode(st).replace(/\+/g, " ")
+          const nice = dec.replace(/[_-]+/g, " ").trim()
+          return nice || st || b || p
+        }
+
+        for (let i = 0; i < entries.length; i++) {
+          const [k, vRaw] = entries[i]
+          const kStr = String(k || "").trim()
+          const vStrings = collectStringsFromValue(vRaw)
+
+          let path = ""
+          const p0 = normalizeManifestPath(kStr)
+          if (p0 && looksLikePath(p0)) path = p0
+          else {
+            for (const s of vStrings) {
+              const pp = normalizeManifestPath(s)
+              if (pp && looksLikePath(pp)) { path = pp; break }
+            }
+          }
+
+          if (!path) continue
+          if (seen.has(path)) continue
+          seen.add(path)
+
+          out.push({
+            title: titleFromPath(path),
+            author: "",
+            path,
+            id: looksLikeHashish(kStr) ? normHashish(kStr) : "",
+            _key: kStr
+          })
+        }
+
+        return out
+      }
       function normalizeKey(s) {
         return String(s ?? "")
           .toLowerCase()
@@ -950,10 +1009,43 @@
 
           setStatus(`מצמיד נתיבים... (${normalized.length}/${normalized.length})`)
 
+          // ממזגים לתוך הרשימה גם את כל הקבצים שמופיעים ב־files_manifest.json
+          setStatus("ממזג פריטים מתוך ה־manifest...")
+          const manifestItems = buildItemsFromManifest(manifestJson)
+
+          const normP = (p) => String(p || "")
+            .trim()
+            .replace(/^\/+/, "")
+            .replace(/^\.\/+/, "")
+            .replace(/\\/g, "/")
+
+          const byPath = new Map()
+          for (const it of normalized) {
+            const p = normP(it.path)
+            if (!p) continue
+            // נשמור את הגרסה העשירה יותר (metadata) כשיש התנגשות
+            byPath.set(p, it)
+          }
+
+          let addedFromManifest = 0
+          for (const mi of manifestItems) {
+            const p = normP(mi.path)
+            if (!p) continue
+            if (!byPath.has(p)) {
+              // נוודא שיש path מנורמל
+              mi.path = p
+              byPath.set(p, mi)
+              addedFromManifest++
+            }
+          }
+
+          const merged = Array.from(byPath.values())
+          setStatus(`בונה רשימה סופית... | נוספו מה־manifest: ${addedFromManifest}`)
+
           // בניית שדה חיפוש + קטגוריות (לפי נתיב תיקיות)
           const finalItems = []
-          for (let i = 0; i < normalized.length; i++) {
-            const it = normalized[i]
+          for (let i = 0; i < merged.length; i++) {
+            const it = merged[i]
             const cat = computeCategoryFromPath(it.path)
             const q = buildSearchField(it)
             finalItems.push({
