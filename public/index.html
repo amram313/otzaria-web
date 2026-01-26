@@ -217,33 +217,7 @@
         height: 100%;
         border: 0;
       }
-    
-      .debugDetails{
-        margin-top: 8px;
-        padding: 8px 10px;
-        border: 1px dashed #c8c8c8;
-        border-radius: 10px;
-        background: #fafafa;
-      }
-      .debugDetails summary{
-        cursor: pointer;
-        font-weight: 700;
-      }
-      .debugDetails pre{
-        margin: 8px 0 0;
-        white-space: pre-wrap;
-        direction: ltr;
-        text-align: left;
-        font-size: 12px;
-        line-height: 1.35;
-        background: #fff;
-        border: 1px solid #eee;
-        border-radius: 8px;
-        padding: 8px;
-        overflow: auto;
-        max-height: 260px;
-      }
-</style>
+    </style>
   </head>
 
   <body>
@@ -330,6 +304,7 @@
     </div>
 
     <script>
+
       // =========================
       // State
       // =========================
@@ -742,6 +717,23 @@
         const baseNormToPaths = new Map()
         const stemNormToPaths = new Map()
 
+        const pathKeyToPath = new Map()
+        const afterBooksKeyToPath = new Map()
+
+        const safeDecode = (s) => {
+          try { return decodeURIComponent(s) } catch (_) { return s }
+        }
+
+        const normalizePathKey = (p) => {
+          const x0 = String(p ?? "").trim()
+          if (!x0) return ""
+          const x = x0.replaceAll("\\", "/").replace(/^\/+/, "")
+          const parts = x.split("/").filter(Boolean)
+            .map(safeDecode)
+            .map(s => String(s).replace(/\s+/g, " ").trim())
+          return parts.join("/")
+        }
+
         const putUnique = (map, key, path) => {
           if (!key) return
           if (!map.has(key)) map.set(key, path)
@@ -774,6 +766,14 @@
           }
 
           if (path) {
+            const pk = normalizePathKey(path)
+            putUnique(pathKeyToPath, pk, path)
+            const partsPk = pk.split("/").filter(Boolean)
+            const booksIdx = partsPk.indexOf("ספרים")
+            if (booksIdx >= 0 && booksIdx < partsPk.length - 1) {
+              const after = partsPk.slice(booksIdx + 1).join("/")
+              putUnique(afterBooksKeyToPath, after, path)
+            }
             const b = basenameOf(path).toLowerCase()
             const st = stemOfFilename(b).toLowerCase()
             if (b && !baseToPath.has(b)) baseToPath.set(b, path)
@@ -810,11 +810,24 @@
         }
 
         if (onProgress) onProgress(total, total)
-        return { hashToPath, baseToPath, stemToPath, baseNormToPath, stemNormToPath, baseNormToPaths, stemNormToPaths }
+        return { hashToPath, baseToPath, stemToPath, baseNormToPath, stemNormToPath, baseNormToPaths, stemNormToPaths, pathKeyToPath, afterBooksKeyToPath, normalizePathKey }
       }
 
       function pathFromItemUsingMaps(item, maps) {
-        if (looksLikePath(item.path)) return item.path
+        const p0 = String(item.path || "").trim()
+        if (p0) {
+          const pk = (maps && maps.normalizePathKey)
+            ? maps.normalizePathKey(p0)
+            : p0.replaceAll("\\", "/").replace(/^\/+/, "")
+          if (maps?.pathKeyToPath && pk && maps.pathKeyToPath.has(pk)) {
+            const p = maps.pathKeyToPath.get(pk)
+            if (p) return p
+          }
+          if (maps?.afterBooksKeyToPath && pk && maps.afterBooksKeyToPath.has(pk)) {
+            const p = maps.afterBooksKeyToPath.get(pk)
+            if (p) return p
+          }
+        }
 
         const strings = deepCollectStrings(item._raw, 5, 220)
 
@@ -861,6 +874,8 @@
           const p = maps.stemNormToPath.get(nt)
           if (p) return p
         }
+
+        if (p0 && looksLikePath(p0)) return p0
 
         return ""
       }
@@ -1135,107 +1150,11 @@
         }
       }
 
-      
-      function buildMissingPathReport(it) {
-        try {
-          const maps = lastMaps
-          const raw = (it && typeof it === "object") ? (it._raw || it) : {}
-          const title = String(it?.title || "").trim()
-          const author = String(it?.author || "").trim()
-          const id = String(it?.id || "").trim()
-          const cat = Array.isArray(it?.cat) ? it.cat.join(" / ") : ""
-
-          const strings = deepCollectStrings(raw, 5, 220)
-          const report = {
-            title,
-            author,
-            id,
-            cat,
-            path_field: String(it?.path || "").trim(),
-            strings_sample: strings.slice(0, 80)
-          }
-
-          if (!maps) {
-            report.note = "manifest עוד לא נטען (lastMaps=null)"
-            return JSON.stringify(report, null, 2)
-          }
-
-          // 1) Hash matches
-          const hashes = []
-          for (const s of strings) {
-            if (!looksLikeHashish(s)) continue
-            const h = normHashish(s)
-            if (!h) continue
-            const hit = maps.hashToPath && maps.hashToPath.has(h) ? maps.hashToPath.get(h) : ""
-            hashes.push({ raw: s, norm: h, hit_path: hit || "" })
-            if (hashes.length >= 20) break
-          }
-          report.hash_candidates = hashes
-
-          // 2) Filename/base matches (normalized)
-          const baseHits = []
-          const stemHits = []
-          for (const s of strings) {
-            const b0 = basenameOf(s)
-            if (!b0) continue
-            const b = String(b0).toLowerCase()
-            const st = stemOfFilename(b)
-            const nb = normalizeKey(b)
-            const ns = normalizeKey(st)
-
-            if (nb) {
-              const unique = maps.baseNormToPath ? (maps.baseNormToPath.get(nb) || "") : ""
-              const many = maps.baseNormToPaths ? (maps.baseNormToPaths.get(nb) || []) : []
-              if (unique || (Array.isArray(many) && many.length)) {
-                baseHits.push({
-                  raw: s,
-                  basename: b,
-                  norm: nb,
-                  unique_path: unique,
-                  candidates: Array.isArray(many) ? many.slice(0, 12) : []
-                })
-              }
-            }
-
-            if (ns) {
-              const uniqueS = maps.stemNormToPath ? (maps.stemNormToPath.get(ns) || "") : ""
-              const manyS = maps.stemNormToPaths ? (maps.stemNormToPaths.get(ns) || []) : []
-              if (uniqueS || (Array.isArray(manyS) && manyS.length)) {
-                stemHits.push({
-                  raw: s,
-                  stem: st,
-                  norm: ns,
-                  unique_path: uniqueS,
-                  candidates: Array.isArray(manyS) ? manyS.slice(0, 12) : []
-                })
-              }
-            }
-
-            if (baseHits.length >= 15 && stemHits.length >= 15) break
-          }
-          report.basename_matches = baseHits.slice(0, 15)
-          report.stem_matches = stemHits.slice(0, 15)
-
-          // 3) Title heuristic (only if exists)
-          const nt = normalizeKey(title || "")
-          if (nt) {
-            const p = maps.stemNormToPath ? (maps.stemNormToPath.get(nt) || "") : ""
-            const manyT = maps.stemNormToPaths ? (maps.stemNormToPaths.get(nt) || []) : []
-            report.title_norm = nt
-            report.title_match = { unique_path: p, candidates: Array.isArray(manyT) ? manyT.slice(0, 12) : [] }
-          }
-
-          return JSON.stringify(report, null, 2)
-        } catch (e) {
-          return String(e && e.message ? e.message : e)
-        }
-      }
-
-function renderCard(it) {
+      function renderCard(it) {
         const div = document.createElement("div")
         div.className = "card"
         div.onclick = () => {
-          if (!it.path) return
+          if (!it.path) return alert("לפריט הזה אין נתיב קובץ")
           viewInline(it.path)
         }
 
@@ -1256,29 +1175,13 @@ function renderCard(it) {
         p.textContent = it.path || "(אין נתיב)"
         div.appendChild(p)
 
-        if (!it.path) {
-          const details = document.createElement("details")
-          details.className = "debugDetails"
-          const sum = document.createElement("summary")
-          sum.textContent = "אין נתיב — הצג אבחון"
-          details.appendChild(sum)
-          const pre = document.createElement("pre")
-          pre.textContent = buildMissingPathReport(it)
-          details.appendChild(pre)
-          div.appendChild(details)
-        }
-
         const actions = document.createElement("div")
         actions.className = "actions"
 
         const b1 = document.createElement("button")
         b1.className = "btnSmall"
         b1.textContent = "פתח בטאב"
-        b1.onclick = (e) => {
-          e.stopPropagation()
-          if (!it.path) return alert("אין נתיב לפריט זה. פתח את \"אין נתיב — הצג אבחון\" כדי לראות מה חסר.")
-          openInNewTab(it.path)
-        }
+        b1.onclick = (e) => { e.stopPropagation(); openInNewTab(it.path) }
         actions.appendChild(b1)
 
         const b2 = document.createElement("button")
@@ -1287,7 +1190,7 @@ function renderCard(it) {
         b2.onclick = async (e) => {
           e.stopPropagation()
           try {
-            await navigator.clipboard.writeText(it.path || buildMissingPathReport(it) || "")
+            await navigator.clipboard.writeText(it.path || "")
           } catch (_) {}
         }
         actions.appendChild(b2)
@@ -1444,6 +1347,7 @@ function renderCard(it) {
       // =========================
       refreshCatalog(false)
 
-    </script>
+    
+</script>
   </body>
 </html>
