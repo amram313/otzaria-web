@@ -304,6 +304,7 @@
     </div>
 
     <script>
+
       // =========================
       // State
       // =========================
@@ -716,6 +717,23 @@
         const baseNormToPaths = new Map()
         const stemNormToPaths = new Map()
 
+        const pathKeyToPath = new Map()
+        const afterBooksKeyToPath = new Map()
+
+        const safeDecode = (s) => {
+          try { return decodeURIComponent(s) } catch (_) { return s }
+        }
+
+        const normalizePathKey = (p) => {
+          const x0 = String(p ?? "").trim()
+          if (!x0) return ""
+          const x = x0.replaceAll("\\", "/").replace(/^\/+/, "")
+          const parts = x.split("/").filter(Boolean)
+            .map(safeDecode)
+            .map(s => String(s).replace(/\s+/g, " ").trim())
+          return parts.join("/")
+        }
+
         const putUnique = (map, key, path) => {
           if (!key) return
           if (!map.has(key)) map.set(key, path)
@@ -748,6 +766,14 @@
           }
 
           if (path) {
+            const pk = normalizePathKey(path)
+            putUnique(pathKeyToPath, pk, path)
+            const partsPk = pk.split("/").filter(Boolean)
+            const booksIdx = partsPk.indexOf("ספרים")
+            if (booksIdx >= 0 && booksIdx < partsPk.length - 1) {
+              const after = partsPk.slice(booksIdx + 1).join("/")
+              putUnique(afterBooksKeyToPath, after, path)
+            }
             const b = basenameOf(path).toLowerCase()
             const st = stemOfFilename(b).toLowerCase()
             if (b && !baseToPath.has(b)) baseToPath.set(b, path)
@@ -784,11 +810,24 @@
         }
 
         if (onProgress) onProgress(total, total)
-        return { hashToPath, baseToPath, stemToPath, baseNormToPath, stemNormToPath, baseNormToPaths, stemNormToPaths }
+        return { hashToPath, baseToPath, stemToPath, baseNormToPath, stemNormToPath, baseNormToPaths, stemNormToPaths, pathKeyToPath, afterBooksKeyToPath, normalizePathKey }
       }
 
       function pathFromItemUsingMaps(item, maps) {
-        if (looksLikePath(item.path)) return item.path
+        const p0 = String(item.path || "").trim()
+        if (p0) {
+          const pk = (maps && maps.normalizePathKey)
+            ? maps.normalizePathKey(p0)
+            : p0.replaceAll("\\", "/").replace(/^\/+/, "")
+          if (maps?.pathKeyToPath && pk && maps.pathKeyToPath.has(pk)) {
+            const p = maps.pathKeyToPath.get(pk)
+            if (p) return p
+          }
+          if (maps?.afterBooksKeyToPath && pk && maps.afterBooksKeyToPath.has(pk)) {
+            const p = maps.afterBooksKeyToPath.get(pk)
+            if (p) return p
+          }
+        }
 
         const strings = deepCollectStrings(item._raw, 5, 220)
 
@@ -835,6 +874,8 @@
           const p = maps.stemNormToPath.get(nt)
           if (p) return p
         }
+
+        if (p0 && looksLikePath(p0)) return p0
 
         return ""
       }
@@ -1306,6 +1347,7 @@
       // =========================
       refreshCatalog(false)
 
-    </script>
+    
+</script>
   </body>
 </html>
