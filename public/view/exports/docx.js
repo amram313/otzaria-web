@@ -48,8 +48,9 @@
 <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:mirrorMargins/>
   <w:rtlGutter/>
-  <w:themeFontLang w:val="en-US" w:bidi="he-IL"/>
+  <w:themeFontLang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/>
   <w:bidi/>
+  <w:bidiVis/>
 </w:settings>`
         )
       }
@@ -62,7 +63,7 @@
     <w:name w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:jc w:val="right"/><w:bidi/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/></w:rPr>
+    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/></w:rPr>
   </w:style>
 
   <w:style w:type="paragraph" w:styleId="Heading1">
@@ -71,7 +72,7 @@
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="240" w:after="80"/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="48"/><w:szCs w:val="48"/></w:rPr>
+    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="48"/><w:szCs w:val="48"/></w:rPr>
   </w:style>
 
   <w:style w:type="paragraph" w:styleId="Heading2">
@@ -80,7 +81,7 @@
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="200" w:after="70"/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="40"/><w:szCs w:val="40"/></w:rPr>
+    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="40"/><w:szCs w:val="40"/></w:rPr>
   </w:style>
 
   <w:style w:type="paragraph" w:styleId="Heading3">
@@ -89,7 +90,7 @@
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="180" w:after="60"/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="34"/><w:szCs w:val="34"/></w:rPr>
+    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="34"/><w:szCs w:val="34"/></w:rPr>
   </w:style>
 
   <w:style w:type="paragraph" w:styleId="Heading4">
@@ -98,14 +99,14 @@
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:jc w:val="right"/><w:bidi/><w:spacing w:before="160" w:after="50"/></w:pPr>
-    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="30"/><w:szCs w:val="30"/></w:rPr>
+    <w:rPr><w:rtl/><w:lang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/><w:b/><w:sz w:val="30"/><w:szCs w:val="30"/></w:rPr>
   </w:style>
 
   <w:style w:type="character" w:styleId="Hyperlink">
     <w:name w:val="Hyperlink"/>
     <w:uiPriority w:val="99"/>
     <w:unhideWhenUsed/>
-    <w:rPr><w:color w:val="0000FF"/><w:u w:val="single"/><w:rtl/><w:lang w:val="he-IL" w:bidi="he-IL"/></w:rPr>
+    <w:rPr><w:color w:val="0000FF"/><w:u w:val="single"/><w:rtl/><w:lang w:val="he-IL" w:eastAsia="he-IL" w:bidi="he-IL"/></w:rPr>
   </w:style>
 </w:styles>`
         )
