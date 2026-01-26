@@ -252,7 +252,7 @@
         <button class="btnSmall" onclick="downloadMissing()">הורד רשימת חסרים</button>
 
         <label class="pill">
-          <input id="searchAllCats" type="checkbox" onchange="applySearch()" checked />
+          <input id="searchAllCats" type="checkbox" onchange="applySearch()" />
           חיפוש בכל הקטגוריות
         </label>
       </div>
@@ -304,7 +304,6 @@
     </div>
 
     <script>
-
       // =========================
       // State
       // =========================
@@ -717,23 +716,6 @@
         const baseNormToPaths = new Map()
         const stemNormToPaths = new Map()
 
-        const pathKeyToPath = new Map()
-        const afterBooksKeyToPath = new Map()
-
-        const safeDecode = (s) => {
-          try { return decodeURIComponent(s) } catch (_) { return s }
-        }
-
-        const normalizePathKey = (p) => {
-          const x0 = String(p ?? "").trim()
-          if (!x0) return ""
-          const x = x0.replaceAll("\\", "/").replace(/^\/+/, "")
-          const parts = x.split("/").filter(Boolean)
-            .map(safeDecode)
-            .map(s => String(s).replace(/\s+/g, " ").trim())
-          return parts.join("/")
-        }
-
         const putUnique = (map, key, path) => {
           if (!key) return
           if (!map.has(key)) map.set(key, path)
@@ -766,14 +748,6 @@
           }
 
           if (path) {
-            const pk = normalizePathKey(path)
-            putUnique(pathKeyToPath, pk, path)
-            const partsPk = pk.split("/").filter(Boolean)
-            const booksIdx = partsPk.indexOf("ספרים")
-            if (booksIdx >= 0 && booksIdx < partsPk.length - 1) {
-              const after = partsPk.slice(booksIdx + 1).join("/")
-              putUnique(afterBooksKeyToPath, after, path)
-            }
             const b = basenameOf(path).toLowerCase()
             const st = stemOfFilename(b).toLowerCase()
             if (b && !baseToPath.has(b)) baseToPath.set(b, path)
@@ -810,24 +784,11 @@
         }
 
         if (onProgress) onProgress(total, total)
-        return { hashToPath, baseToPath, stemToPath, baseNormToPath, stemNormToPath, baseNormToPaths, stemNormToPaths, pathKeyToPath, afterBooksKeyToPath, normalizePathKey }
+        return { hashToPath, baseToPath, stemToPath, baseNormToPath, stemNormToPath, baseNormToPaths, stemNormToPaths }
       }
 
       function pathFromItemUsingMaps(item, maps) {
-        const p0 = String(item.path || "").trim()
-        if (p0) {
-          const pk = (maps && maps.normalizePathKey)
-            ? maps.normalizePathKey(p0)
-            : p0.replaceAll("\\", "/").replace(/^\/+/, "")
-          if (maps?.pathKeyToPath && pk && maps.pathKeyToPath.has(pk)) {
-            const p = maps.pathKeyToPath.get(pk)
-            if (p) return p
-          }
-          if (maps?.afterBooksKeyToPath && pk && maps.afterBooksKeyToPath.has(pk)) {
-            const p = maps.afterBooksKeyToPath.get(pk)
-            if (p) return p
-          }
-        }
+        if (looksLikePath(item.path)) return item.path
 
         const strings = deepCollectStrings(item._raw, 5, 220)
 
@@ -874,8 +835,6 @@
           const p = maps.stemNormToPath.get(nt)
           if (p) return p
         }
-
-        if (p0 && looksLikePath(p0)) return p0
 
         return ""
       }
@@ -1096,7 +1055,9 @@
 
         let list = items
 
-        if (!searchAllCats) {
+        const hasCat = Array.isArray(selectedCategorySegs) && selectedCategorySegs.length
+        // ניווט קטגוריות תמיד מסנן את הרשימה; אופציית "חיפוש בכל הקטגוריות" משפיעה רק כאשר יש מחרוזת חיפוש.
+        if (hasCat && !(q && searchAllCats)) {
           list = list.filter(matchesSelectedCategory)
         }
 
@@ -1119,6 +1080,7 @@
         const hint = []
         if (selectedCategorySegs.length) hint.push("קטגוריה: " + selectedCategorySegs.join(" / "))
         if (q) hint.push("חיפוש: " + q)
+        if (q && searchAllCats && selectedCategorySegs.length) hint.push("חיפוש בכל הקטגוריות")
         hint.push("סה\"כ: " + currentList.length)
         document.getElementById("scopeHint").textContent = hint.join(" | ")
 
@@ -1170,10 +1132,6 @@
           (it.cat && it.cat.length ? ` | <span>${escapeHtml(it.cat.join(" / "))}</span>` : "")
         div.appendChild(meta)
 
-        const p = document.createElement("div")
-        p.className = "path"
-        p.textContent = it.path || "(אין נתיב)"
-        div.appendChild(p)
 
         const actions = document.createElement("div")
         actions.className = "actions"
@@ -1184,16 +1142,6 @@
         b1.onclick = (e) => { e.stopPropagation(); openInNewTab(it.path) }
         actions.appendChild(b1)
 
-        const b2 = document.createElement("button")
-        b2.className = "btnSmall"
-        b2.textContent = "העתק נתיב"
-        b2.onclick = async (e) => {
-          e.stopPropagation()
-          try {
-            await navigator.clipboard.writeText(it.path || "")
-          } catch (_) {}
-        }
-        actions.appendChild(b2)
 
         div.appendChild(actions)
         return div
@@ -1347,7 +1295,6 @@
       // =========================
       refreshCatalog(false)
 
-    
-</script>
+    </script>
   </body>
 </html>
