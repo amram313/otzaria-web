@@ -14,7 +14,9 @@ export async function onRequest(context) {
     })
   }
 
-  const cacheKey = new Request(url.toString(), request)
+  // Cache-bucket (שעה) כדי להתעדכן מהר בשינויים יומיים במאגר
+  const hourBucket = Math.floor(Date.now() / 3600000)
+  const cacheKey = new Request(url.toString() + (url.search ? "&" : "?") + "hb=" + String(hourBucket), request)
   const cached = await caches.default.match(cacheKey)
   if (cached) return cached
 
@@ -72,6 +74,10 @@ export async function onRequest(context) {
   const baseFile = safeDecode(parts[parts.length - 1] || "")
   const unitDir = safeDecode(parts[parts.length - 2] || "")
 
+  // bookRoot = folder that contains both unit folders and a "מפרשים" folder.
+  // Example:
+  //   .../משנה תורה/ספר זמנים/<book>.txt
+  //   .../משנה תורה/מפרשים/<commentator>/ספר זמנים/<commentary>.txt
   const bookRoot = parts.slice(0, Math.max(0, parts.length - 2)).join("/") + "/"
   const commentRootPrefix = bookRoot + "מפרשים/"
   const unitNeedle = "/" + unitDir + "/"
@@ -89,6 +95,8 @@ export async function onRequest(context) {
     if (!k.startsWith(commentRootPrefix)) continue
     if (!k.includes(unitNeedle)) continue
 
+    // Heuristic filter: commentaries for the current base book almost always
+    // include the base key (e.g. "הלכות תעניות") in the filename.
     const fileName = k.split("/").pop() || ""
     if (baseKey && !fileName.includes(baseKey)) continue
 
@@ -122,7 +130,7 @@ export async function onRequest(context) {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
-      "Cache-Control": "public, max-age=86400",
+      "Cache-Control": "public, max-age=3600",
     },
   })
 
