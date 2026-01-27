@@ -3,22 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Viewer</title>
-
-    <script src="../vendor/purify.min.js"></script>
-    <script src="../vendor/paged.polyfill.js"></script>
-    <script src="../vendor/html-to-docx.umd.js"></script>
-    <script src="../vendor/jszip.min.js"></script>
-
+    <title>צפייה</title>
     <style>
       :root{
         --fs: 18px;
         --lh: 1.8;
         --readerMax: 980px;
         --pad: 18px;
+        --drawerW: 340px;
       }
 
-      *{ box-sizing: border-box; }
       body{
         font-family: system-ui, Arial;
         margin: 0;
@@ -34,46 +28,58 @@
       .topbar{
         position: sticky;
         top: 0;
-        z-index: 20;
+        z-index: 30;
         background: #fafafa;
         border-bottom: 1px solid #eee;
-        padding: 10px 14px;
+        padding: 10px 12px;
       }
+
       .row{
-        display:flex;
-        gap:10px;
-        align-items:center;
+        display: flex;
+        gap: 8px;
+        align-items: center;
         flex-wrap: wrap;
       }
+
+      .spacer{ flex: 1; }
+
       .btn{
-        border: 1px solid #e5e5e5;
-        background: #fff;
         padding: 8px 12px;
+        font-size: 14px;
+        border: 1px solid #ddd;
         border-radius: 10px;
+        background: #fff;
         cursor: pointer;
       }
-      .btn:hover{ background:#f9f9f9; }
+
+      .btn:active{ transform: translateY(1px); }
+
       .pill{
-        font-size: 12px;
-        color:#444;
-        background:#fff;
-        border:1px solid #eee;
         padding: 6px 10px;
+        border: 1px solid #ddd;
         border-radius: 999px;
+        background: #fff;
+        font-size: 12px;
+        color: #444;
       }
-      .spacer{ flex:1; }
 
-      .catalogSearch{
-        padding: 8px 12px;
-        border:1px solid #e5e5e5;
+      .select{
+        padding: 8px 10px;
+        border: 1px solid #ddd;
         border-radius: 10px;
-        min-width: 220px;
+        background: #fff;
+        font-size: 14px;
       }
 
-      .wrap{
-        max-width: 1180px;
-        margin: 0 auto;
-        padding: 18px 14px 36px;
+      .meta{
+        margin-top: 6px;
+        font-size: 12px;
+        color: #666;
+        word-break: break-all;
+      }
+
+      .page{
+        padding: 14px 12px 22px 12px;
       }
 
       .reader{
@@ -88,12 +94,6 @@
         padding: var(--pad);
       }
 
-      .title{
-        font-weight: 800;
-        font-size: 18px;
-        margin-bottom: 10px;
-      }
-
       .loading{
         font-size: 14px;
         color: #666;
@@ -106,11 +106,9 @@
 
       .content h1{ font-size: 1.55em; margin: 0 0 10px 0; }
       .content h2{ font-size: 1.25em; margin: 18px 0 8px 0; }
-      .content h3{ font-size: 1.1em; margin: 16px 0 6px 0; }
-
-      .content p{ margin: 10px 0; }
-      .content a{ color: inherit; }
-      .content ul, .content ol{ margin: 10px 0 10px 0; padding-right: 22px; }
+      .content h3{ font-size: 1.08em; margin: 14px 0 6px 0; }
+      .content p { margin: 10px 0; }
+      .content h1, .content h2, .content h3{ scroll-margin-top: 120px; }
 
       .pre{
         white-space: pre-wrap;
@@ -121,185 +119,250 @@
         direction: rtl;
       }
 
-      iframe#pdf{
+      iframe{
         width: 100%;
-        height: calc(100vh - 190px);
-        border: 0;
+        height: 80vh;
+        border: 1px solid #e5e5e5;
         border-radius: 12px;
-        background: #f6f6f6;
+        background: #fff;
       }
 
       .err{
-        white-space: pre-wrap;
-        color: #b00020;
+        color: #a00;
         font-size: 14px;
+        white-space: pre-wrap;
+        direction: ltr;
+        text-align: left;
       }
 
-      /* Drawer (TOC) */
+      /* Drawer (תוכן עניינים) */
       .overlay{
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,.35);
+        background: rgba(0,0,0,0.25);
         display: none;
-        z-index: 50;
+        z-index: 40;
       }
-      .overlay.open{ display:block; }
 
       .drawer{
         position: fixed;
         top: 0;
         bottom: 0;
         right: 0;
-        width: min(420px, 92vw);
+        width: min(var(--drawerW), 92vw);
         background: #fff;
-        border-left: 1px solid #eee;
-        transform: translateX(100%);
-        transition: transform .2s ease;
-        z-index: 60;
+        border-left: 1px solid #e5e5e5;
+        transform: translateX(110%);
+        transition: transform 160ms ease;
+        z-index: 50;
         display: flex;
         flex-direction: column;
       }
-      .drawer.open{ transform: translateX(0); }
+
+      .drawer.open{
+        transform: translateX(0);
+      }
+
+      .overlay.open{
+        display: block;
+      }
 
       .drawerTop{
-        display:flex;
-        gap: 10px;
-        align-items:center;
-        padding: 12px 12px;
-        border-bottom: 1px solid #eee;
-        background: #fafafa;
-      }
-      .drawerTitle{ font-weight: 800; }
-      .tocList{
-        padding: 8px 8px 18px;
-        overflow:auto;
-      }
-      .tocItem{
-        padding: 8px 10px;
-        border-radius: 10px;
-        cursor: pointer;
-        border: 1px solid transparent;
-        margin: 6px 0;
-      }
-      .tocItem:hover{
-        border-color: #eee;
-        background: #fafafa;
-      }
-      .lvl1{ padding-right: 14px; font-weight: 700; }
-      .lvl2{ padding-right: 24px; }
-      .lvl3{ padding-right: 34px; }
-      .lvl4{ padding-right: 44px; }
-
-      /* --- Commentaries Split View --- */
-      .splitWrap{
-        margin-top: 12px;
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 12px;
-        align-items: stretch;
-      }
-      .splitWrap.showComms{
-        grid-template-columns: 420px 1fr;
-      }
-
-      .txtPane{
-        border: 1px solid #eee;
-        border-radius: 12px;
-        background: #fff;
-        overflow: auto;
-        max-height: calc(100vh - 210px);
         padding: 10px 12px;
-      }
-      .txtLines{
-        font-size: var(--fs);
-        line-height: var(--lh);
-        direction: rtl;
-      }
-      .ln{
-        padding: 2px 0;
-        border-radius: 8px;
-        white-space: pre-wrap;
-        word-break: break-word;
-      }
-      .ln.hit{
-        background: #fff7cc;
-      }
-
-      .commPanel{
-        border: 1px solid #eee;
-        border-radius: 12px;
-        background: #fff;
-        overflow: hidden;
-        max-height: calc(100vh - 210px);
-        display: flex;
-        flex-direction: column;
-      }
-      .commTop{
+        border-bottom: 1px solid #eee;
         display: flex;
         gap: 8px;
         align-items: center;
-        padding: 10px 10px;
-        border-bottom: 1px solid #eee;
-        background: #fafafa;
       }
-      .commSel, .commMode{
-        flex: 1;
-        padding: 7px 8px;
-        border-radius: 10px;
-        border: 1px solid #e5e5e5;
-        background: #fff;
+
+      .drawerTitle{
         font-size: 14px;
+        font-weight: 700;
       }
-      .btn.mini{
+
+      .drawerBody{
+        padding: 10px;
+        overflow: auto;
+      }
+
+      .toc a{
+        display: block;
         padding: 7px 10px;
+        border-radius: 10px;
+        text-decoration: none;
+        color: #222;
         font-size: 13px;
       }
-      .commMeta{
-        padding: 8px 10px;
-        font-size: 12px;
-        color: #666;
-        border-bottom: 1px solid #f0f0f0;
+
+      .toc a:hover{
+        background: #f3f3f3;
       }
-      .commBody{
+
+      .toc .small{
+        color: #666;
+        font-size: 12px;
+        padding: 6px 10px;
+      }
+
+      /* Printed TOC for PDF */
+      .printToc { display: none; }
+      @media print {
+        .topbar, .overlay, .drawer { display: none !important; }
+        body { background: #fff !important; }
+        .page { padding: 0 !important; }
+        .card { border: none !important; }
+        .printToc { display: block !important; }
+        .printToc h1 { margin: 0 0 12px 0; }
+        .printToc ol { margin: 0; padding: 0 18px 0 0; }
+        .printToc li { margin: 0 0 6px 0; }
+        .printToc a { color: #000; text-decoration: underline; }
+        .printBreak { page-break-after: always; }
+      }
+
+      .catalogSearch { min-width: 180px; flex: 1 1 220px; padding: 8px 10px; font-size: 14px; border: 1px solid #ddd; border-radius: 10px; }
+
+
+      /* ---------- Commentaries (מפרשים) ---------- */
+      .commPicker{
+        position: fixed;
+        top: 64px;
+        left: 12px;
+        right: 12px;
+        max-width: 920px;
+        margin: 0 auto;
+        background: #fff;
+        border: 1px solid #e5e5e5;
+        border-radius: 12px;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+        z-index: 60;
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .commPicker.open{ display: flex; }
+
+      .commPickerTop{
+        padding: 10px 12px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .commPickerTitle{
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .commPickerBody{
         padding: 10px 12px;
         overflow: auto;
-        font-size: calc(var(--fs) - 1px);
+        max-height: min(60vh, 520px);
+      }
+
+      .commList{
+        display: grid;
+        gap: 8px;
+      }
+
+      .commItem{
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border: 1px solid #eee;
+        border-radius: 10px;
+        background: #fafafa;
+      }
+
+      .commItem label{
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .commPickerHint{
+        font-size: 12px;
+        color: #666;
+        margin-top: 6px;
+      }
+
+      .txtWrap{
+        font-size: var(--fs);
         line-height: var(--lh);
       }
-      .commLine{
-        padding: 2px 0;
-        border-radius: 8px;
+
+      .para{
+        margin: 10px 0;
+      }
+
+      .paraText{
         white-space: pre-wrap;
         word-break: break-word;
       }
-      .commLine.hit{
-        background: #eaffea;
+
+      .tabs{
+        margin-top: 8px;
+        display: none;
+        gap: 6px;
+        flex-wrap: wrap;
       }
 
-      @media (max-width: 860px){
-        .splitWrap.showComms{
-          grid-template-columns: 1fr;
-        }
-        .commPanel{
-          max-height: 45vh;
-        }
-        .txtPane{
-          max-height: 55vh;
-        }
+      .tabs.open{ display: flex; }
+
+      .tabBtn{
+        padding: 6px 10px;
+        border: 1px solid #ddd;
+        border-radius: 999px;
+        background: #fff;
+        font-size: 12px;
+        cursor: pointer;
       }
+
+      .tabBtn.active{
+        border-color: #bbb;
+        font-weight: 700;
+      }
+
+      .tabBody{
+        display: none;
+        margin-top: 8px;
+        padding: 10px 12px;
+        border: 1px solid #eee;
+        border-radius: 12px;
+        background: #fcfcfc;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: calc(var(--fs) - 1px);
+        line-height: 1.85;
+      }
+
+      .tabBody.open{ display: block; }
+
+      .commRef{
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 6px;
+      }
+
     </style>
+
+    <script src="/vendor/jszip.min.js"></script>
+    <script src="./exports/pdf.js"></script>
+    <script src="./exports/docx.js"></script>
+    <script src="./exports/epub.js"></script>
+
   </head>
 
   <body>
     <div class="topbar">
       <div class="row">
-        <button class="btn" id="btnHome">בית</button>
+        <button class="btn" onclick="history.back()">חזור</button>
         <button class="btn" id="btnCatalog">קטלוג</button>
         <input class="catalogSearch" id="catalogSearch" placeholder="חיפוש בקטלוג..." />
         <button class="btn" id="btnCatalogSearch">חפש</button>
         <button class="btn" id="btnRaw">פתח מקור (RAW)</button>
         <button class="btn" id="btnToc" style="display:none;">תוכן עניינים</button>
-
         <button class="btn" id="btnComms" style="display:none;">מפרשים</button>
 
         <button class="btn" id="btnExportPdf" style="display:none;">ייצוא PDF</button>
@@ -309,37 +372,30 @@
         <span class="pill" id="fontLabel">גופן: —</span>
         <button class="btn" id="btnMinus" title="הקטן גופן">−</button>
         <button class="btn" id="btnPlus" title="הגדל גופן">+</button>
-        <button class="btn" id="btnBook" title="מצב עמוד ספר">עמוד ספר: כבוי</button>
+
+        <button class="btn" id="btnBook" title="מצב קריאה">עמוד ספר: כבוי</button>
+
+        <span class="spacer"></span>
+
+        <button class="btn" id="btnPrev" style="display:none;">◀ קודם</button>
+        <button class="btn" id="btnNext" style="display:none;">הבא ▶</button>
+
+        <select class="select" id="chapterSel" style="display:none;"></select>
+        <select class="select" id="verseSel" style="display:none;"></select>
+        <button class="btn" id="btnTop" style="display:none;">למעלה</button>
       </div>
+
+      <div class="meta" id="meta"></div>
     </div>
 
-    <div class="wrap">
+    <div class="page">
       <div class="reader">
         <div class="card" id="card">
           <div class="loading" id="loading">טוען…</div>
 
           <div class="content" id="content" style="display:none;"></div>
+          <div class="txtWrap" id="txtHtml" style="display:none;"></div>
           <pre class="pre" id="pre" style="display:none;"></pre>
-          <div class="splitWrap" id="splitWrap" style="display:none;">
-            <div class="commPanel" id="commPanel" style="display:none;">
-              <div class="commTop">
-                <select class="commSel" id="commSel"></select>
-                <select class="commMode" id="commMode">
-                  <option value="linked">מפרש מקושר</option>
-                  <option value="page">צורת הדף</option>
-                </select>
-                <button class="btn mini" id="btnCommRaw" title="פתח מקור (RAW)">RAW</button>
-                <button class="btn mini" id="btnCommClose" title="סגור">✕</button>
-              </div>
-              <div class="commMeta" id="commMeta"></div>
-              <div class="commBody" id="commBody"></div>
-            </div>
-
-            <div class="txtPane" id="txtPane">
-              <div class="txtLines" id="txtLines"></div>
-            </div>
-          </div>
-
           <div class="err" id="err" style="display:none;"></div>
           <iframe id="pdf" style="display:none;"></iframe>
         </div>
@@ -348,13 +404,35 @@
 
     <div class="overlay" id="overlay"></div>
 
+    <div class="overlay" id="commOverlay" style="display:none;"></div>
+
+    <div class="commPicker" id="commPicker">
+      <div class="commPickerTop">
+        <div class="commPickerTitle">בחירת מפרשים להצגה</div>
+        <span class="spacer"></span>
+        <button class="btn" id="btnCommAll">בחר הכל</button>
+        <button class="btn" id="btnCommNone">נקה</button>
+        <button class="btn" id="btnCommApply">החל</button>
+        <button class="btn" id="btnCommClose">סגור</button>
+      </div>
+      <div class="commPickerBody">
+        <div class="commList" id="commList"></div>
+        <div class="commPickerHint" id="commHint"></div>
+      </div>
+    </div>
+
     <aside class="drawer" id="drawer">
       <div class="drawerTop">
         <div class="drawerTitle">תוכן עניינים</div>
         <span class="spacer"></span>
         <button class="btn" id="btnCloseToc">סגור</button>
       </div>
-      <div class="tocList" id="tocList"></div>
+      <div class="drawerBody">
+        <div class="toc">
+          <div class="small" id="tocHint"></div>
+          <div id="tocList"></div>
+        </div>
+      </div>
     </aside>
 
     <script>
@@ -364,26 +442,6 @@
       let currentPlainText = ""
       let currentTocItems = [] // [{id,label,level}]
       let commUI = null
-      let commState = {
-        active: false,
-        basePath: "",
-        baseFile: "",
-        mainLines: [],
-        mainEls: [],
-        mainTops: [],
-        commentaries: [],
-        selected: null,
-        commText: "",
-        commLines: [],
-        commEls: [],
-        commTops: [],
-        links: [],
-        mode: "linked",
-        lastMainLine: -1,
-        raf: 0,
-        needMeasure: true,
-        needMeasureComm: true,
-      }
 
       function encodePath(path){
         return String(path).split("/").filter(Boolean).map(encodeURIComponent).join("/")
@@ -395,32 +453,35 @@
       }
 
       function isPdf(path){
-        return /\.pdf$/i.test(path)
+        return /\.pdf$/i.test(path || "")
       }
 
       function looksLikeHtml(text){
-        const t = String(text || "").trim()
-        return t.startsWith("<!doctype") || t.startsWith("<html") || t.startsWith("<div") || t.includes("<h1") || t.includes("<h2") || t.includes("<p")
+        const t = String(text || "")
+        return /<\/?(h1|h2|h3|p|b|strong|div|span)\b/i.test(t)
       }
 
       function sanitizeHtml(html){
-        if (window.DOMPurify){
-          return window.DOMPurify.sanitize(html, {
-            USE_PROFILES: { html: true },
-            ADD_ATTR: ["id", "name"],
-          })
-        }
-        return html
+        const doc = new DOMParser().parseFromString(String(html || ""), "text/html")
+        doc.querySelectorAll("script, style, iframe, object, embed, link").forEach(n => n.remove())
+
+        doc.querySelectorAll("*").forEach(el => {
+          for (const attr of Array.from(el.attributes)){
+            const name = String(attr.name || "").toLowerCase()
+            const val = String(attr.value || "")
+            if (name.startsWith("on")) el.removeAttribute(attr.name)
+            if (name === "href" && /^\s*javascript:/i.test(val)) el.removeAttribute(attr.name)
+          }
+          if (el.tagName === "A"){
+            el.setAttribute("target","_blank")
+            el.setAttribute("rel","noreferrer noopener")
+          }
+        })
+
+        return doc.body.innerHTML
       }
 
-      function clamp(n, a, b){
-        return Math.max(a, Math.min(b, n))
-      }
-
-      function savePrefs(p){
-        localStorage.setItem("view_fs", String(p.fs))
-        localStorage.setItem("view_book", p.book ? "1" : "0")
-      }
+      function clamp(n,a,b){ return Math.max(a, Math.min(b,n)) }
 
       function loadPrefs(){
         const fs = Number(localStorage.getItem("view_fs") || "18")
@@ -428,50 +489,25 @@
         return { fs: clamp(Number.isFinite(fs) ? fs : 18, 12, 34), book }
       }
 
+      function savePrefs(p){
+        localStorage.setItem("view_fs", String(p.fs))
+        localStorage.setItem("view_book", p.book ? "1" : "0")
+      }
+
       function applyPrefs(p){
         document.documentElement.style.setProperty("--fs", p.fs + "px")
         document.getElementById("fontLabel").textContent = "גופן: " + p.fs
         document.body.classList.toggle("book", !!p.book)
         document.getElementById("btnBook").textContent = "עמוד ספר: " + (p.book ? "פעיל" : "כבוי")
-        invalidateMeasures()
       }
 
       function slug(text){
         const t = String(text || "").trim()
-        return t.replace(/\s+/g,"-").replace(/[^\u0590-\u05FFa-zA-Z0-9\-]/g, "")
+        return t.replace(/\s+/g,"-").replace(/[^\u0590-\u05FFa-zA-Z0-9\-]/g,"").slice(0,80) || ("sec-" + Math.random().toString(16).slice(2))
       }
 
-      function buildTocFromHtml(){
-        const host = document.getElementById("content")
-        const hs = host.querySelectorAll("h1,h2,h3,h4")
-        const items = []
-        let i = 0
-        for (const h of hs){
-          const lvl = Number(h.tagName.substring(1))
-          const label = (h.textContent || "").trim()
-          if (!label) continue
-          if (!h.id){
-            h.id = "h-" + lvl + "-" + i + "-" + slug(label).slice(0, 24)
-          }
-          items.push({ id: h.id, label, level: lvl })
-          i++
-        }
-        return items
-      }
-
-      function renderToc(items){
-        const list = document.getElementById("tocList")
-        list.innerHTML = ""
-        for (const it of items){
-          const d = document.createElement("div")
-          d.className = "tocItem lvl" + it.level
-          d.textContent = it.label
-          d.onclick = () => {
-            closeToc()
-            scrollToId(it.id)
-          }
-          list.appendChild(d)
-        }
+      function textOf(el){
+        return String(el && el.textContent ? el.textContent : "").trim()
       }
 
       function scrollToId(id){
@@ -490,19 +526,131 @@
         document.getElementById("drawer").classList.remove("open")
       }
 
-      function showExportButtonsForHtmlOrText(){
-        document.getElementById("btnExportPdf").style.display = "inline-block"
-        document.getElementById("btnExportDocx").style.display = "inline-block"
-        document.getElementById("btnExportEpub").style.display = "inline-block"
+      function buildNav(){
+        const content = document.getElementById("content")
+        const nodes = Array.from(content.querySelectorAll("h1, h2, h3, h4"))
+          .filter(n => textOf(n))
+
+        if (nodes.length === 0) {
+          currentTocItems = []
+          return { items: [], steps: [] }
+        }
+
+        const items = nodes.map((n, idx) => {
+          const level = Number(String(n.tagName).slice(1))
+          if (!n.id) n.id = "h" + level + "-" + idx + "-" + slug(textOf(n))
+          return { id: n.id, label: textOf(n), level }
+        })
+
+        currentTocItems = items
+
+        document.getElementById("btnToc").style.display = "inline-block"
+        document.getElementById("btnTop").style.display = "inline-block"
+
+        const steps =
+          items.filter(x => x.level === 3).length > 1 ? items.filter(x => x.level === 3) :
+          items.filter(x => x.level === 2).length > 1 ? items.filter(x => x.level === 2) :
+          items
+
+        const btnPrev = document.getElementById("btnPrev")
+        const btnNext = document.getElementById("btnNext")
+
+        if (steps.length > 1) {
+          btnPrev.style.display = "inline-block"
+          btnNext.style.display = "inline-block"
+        } else {
+          btnPrev.style.display = "none"
+          btnNext.style.display = "none"
+        }
+
+        document.getElementById("btnTop").onclick = () => window.scrollTo({ top: 0, behavior: "smooth" })
+
+        const tocList = document.getElementById("tocList")
+        const tocHint = document.getElementById("tocHint")
+        tocList.innerHTML = ""
+
+        const c1 = items.filter(x => x.level === 1).length
+        const c2 = items.filter(x => x.level === 2).length
+        const c3 = items.filter(x => x.level === 3).length
+        const c4 = items.filter(x => x.level === 4).length
+        tocHint.textContent =
+          "H1: " + c1 + " | H2: " + c2 + " | H3: " + c3 + (c4 ? " | H4: " + c4 : "")
+
+        items.forEach((it) => {
+          const a = document.createElement("a")
+          a.href = "#" + it.id
+          a.textContent = it.label
+
+          const indent = (Math.max(1, it.level) - 1) * 14
+          a.style.paddingRight = (10 + indent) + "px"
+
+          if (it.level === 1) a.style.fontWeight = "700"
+          if (it.level >= 3) a.style.color = "#444"
+
+          a.onclick = (e) => {
+            e.preventDefault()
+            closeToc()
+            scrollToId(it.id)
+          }
+
+          tocList.appendChild(a)
+        })
+
+        let currentI = -1
+
+        function setCurrentByScroll(){
+          if (steps.length === 0) return
+          const topY = window.scrollY + 140
+          let best = -1
+
+          for (let i = 0; i < steps.length; i++){
+            const el = document.getElementById(steps[i].id)
+            if (!el) continue
+            const y = el.getBoundingClientRect().top + window.scrollY
+            if (y <= topY) best = i
+            else break
+          }
+
+          currentI = best
+        }
+
+        btnPrev.onclick = () => {
+          if (steps.length === 0) return
+          if (currentI <= 0) scrollToId(steps[0].id)
+          else scrollToId(steps[currentI - 1].id)
+        }
+
+        btnNext.onclick = () => {
+          if (steps.length === 0) return
+          if (currentI < 0) scrollToId(steps[0].id)
+          else if (currentI + 1 >= steps.length) scrollToId(steps[steps.length - 1].id)
+          else scrollToId(steps[currentI + 1].id)
+        }
+
+        window.addEventListener("scroll", () => setCurrentByScroll(), { passive: true })
+        setCurrentByScroll()
+
+        return { items, steps }
       }
 
-      function hideExportButtons(){
-        document.getElementById("btnExportPdf").style.display = "none"
-        document.getElementById("btnExportDocx").style.display = "none"
-        document.getElementById("btnExportEpub").style.display = "none"
+      function requireJSZip() {
+        if (!window.JSZip) {
+          alert("חסר JSZip. ודא ש-/vendor/jszip.min.js נטען תקין.")
+          return false
+        }
+        return true
       }
 
-      function downloadBlob(blob, filename){
+      function xmlEscape(s) {
+        return String(s || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll("\"", "&quot;")
+          .replaceAll("'", "&apos;")
+      }
+
+      function downloadBlob(blob, filename) {
         const a = document.createElement("a")
         const url = URL.createObjectURL(blob)
         a.href = url
@@ -510,429 +658,400 @@
         document.body.appendChild(a)
         a.click()
         a.remove()
-        setTimeout(() => URL.revokeObjectURL(url), 5000)
+        setTimeout(() => URL.revokeObjectURL(url), 1500)
       }
 
-      async function exportPdfFromHtml(html){
-        if (!window.PagedPolyfill){
-          alert("Paged.js לא נטען")
-          return
-        }
-        const iframe = document.createElement("iframe")
-        iframe.style.position = "fixed"
-        iframe.style.right = "-9999px"
-        iframe.style.width = "800px"
-        iframe.style.height = "600px"
-        document.body.appendChild(iframe)
-
-        const doc = iframe.contentDocument
-        doc.open()
-        doc.write("<!doctype html><html dir='rtl' lang='he'><head><meta charset='utf-8'>")
-        doc.write("<style>body{font-family:system-ui,Arial;direction:rtl;font-size:16px;line-height:1.8} h1,h2,h3{page-break-after:avoid} pre{white-space:pre-wrap;word-break:break-word}</style>")
-        doc.write("</head><body>")
-        doc.write(html)
-        doc.write("</body></html>")
-        doc.close()
-
-        await window.PagedPolyfill.preview(doc.body, [], doc)
-
-        const r = await fetch(iframe.src || "")
-        document.body.removeChild(iframe)
-        return r
+      function baseNameFromPath(p) {
+        const s = String(p || "").replaceAll("\\", "/")
+        const parts = s.split("/")
+        return (parts[parts.length - 1] || "book").trim()
       }
 
-      async function exportDocxFromHtml(html){
-        if (!window.htmlToDocx){
-          alert("html-to-docx לא נטען")
-          return
-        }
-        const blob = await window.htmlToDocx(html, null, {
-          table: { row: { cantSplit: true } },
-          footer: false,
-          pageNumber: false,
-        })
-        return blob
+      function fileStem(name) {
+        return String(name || "book").replace(/\.[a-z0-9]{2,6}$/i, "") || "book"
       }
 
-      async function exportEpubFromHtml(html){
-        if (!window.JSZip){
-          alert("JSZip לא נטען")
-          return
-        }
-        const zip = new window.JSZip()
-        const contentOpf = `<?xml version="1.0" encoding="utf-8"?>
-<package version="3.0" unique-identifier="BookId" xmlns="http://www.idpf.org/2007/opf">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="BookId">urn:uuid:${crypto.randomUUID()}</dc:identifier>
-    <dc:title>Book</dc:title>
-    <dc:language>he</dc:language>
-  </metadata>
-  <manifest>
-    <item id="toc" properties="nav" href="nav.xhtml" media-type="application/xhtml+xml"/>
-    <item id="content" href="content.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine>
-    <itemref idref="content"/>
-  </spine>
-</package>`
-        const navXhtml = `<?xml version="1.0" encoding="utf-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" dir="rtl" lang="he">
-  <head><title>TOC</title></head>
-  <body>
-    <nav epub:type="toc" id="toc"><ol><li><a href="content.xhtml">תוכן</a></li></ol></nav>
-  </body>
-</html>`
-        const contentXhtml = `<?xml version="1.0" encoding="utf-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" dir="rtl" lang="he">
-  <head><title>Content</title></head>
-  <body>${html}</body>
-</html>`
-
-        zip.file("mimetype", "application/epub+zip", { compression: "STORE" })
-        zip.folder("META-INF").file("container.xml",
-          `<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>`
-        )
-        const oebps = zip.folder("OEBPS")
-        oebps.file("content.opf", contentOpf)
-        oebps.file("nav.xhtml", navXhtml)
-        oebps.file("content.xhtml", contentXhtml)
-
-        const blob = await zip.generateAsync({ type: "blob" })
-        return blob
-      }
-
-      function escHtml(s){
+      function htmlEscape(s){
         return String(s || "")
-          .replaceAll("&","&amp;")
-          .replaceAll("<","&lt;")
-          .replaceAll(">","&gt;")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll(""", "&quot;")
+          .replaceAll("'", "&#39;")
       }
 
-      function splitLines(text){
-        const t = String(text || "").replaceAll("\r\n","\n").replaceAll("\r","\n")
-        return t.split("\n")
-      }
+      function buildParagraphModel(text){
+        const lines = String(text || "").replaceAll("\r\n","\n").replaceAll("\r","\n").split("\n")
+        const paras = []
+        let start = null
+        let buf = []
 
-      function upperBound(arr, x){
-        let lo = 0
-        let hi = arr.length
-        while (lo < hi){
-          const mid = (lo + hi) >> 1
-          if (arr[mid] <= x) lo = mid + 1
-          else hi = mid
+        const flush = (endIdx) => {
+          if (start === null) return
+          const html = buf.map((l) => htmlEscape(l)).join("<br>")
+          paras.push({ start, end: endIdx, html })
+          start = null
+          buf = []
         }
-        return lo
-      }
 
-      function invalidateMeasures(){
-        commState.needMeasure = true
-        commState.needMeasureComm = true
-      }
-
-      function measureMain(){
-        if (!commUI) return
-        const els = Array.from(commUI.txtLines.querySelectorAll(".ln"))
-        commState.mainEls = els
-        commState.mainTops = els.map(el => el.offsetTop)
-        commState.needMeasure = false
-      }
-
-      function measureComm(){
-        if (!commUI) return
-        const els = Array.from(commUI.commBody.querySelectorAll(".commLine"))
-        commState.commEls = els
-        commState.commTops = els.map(el => el.offsetTop)
-        commState.needMeasureComm = false
-      }
-
-      function pickMainLine(){
-        if (!commUI) return 0
-        if (commState.needMeasure) measureMain()
-        const st = commUI.txtPane.scrollTop
-        const idx = Math.max(0, upperBound(commState.mainTops, st + 12) - 1)
-        return idx
-      }
-
-      function findLinkIndexByBaseLine(lineIdx){
-        const links = commState.links || []
-        if (!links.length) return -1
-        let lo = 0
-        let hi = links.length
-        while (lo < hi){
-          const mid = (lo + hi) >> 1
-          if (links[mid].baseLine <= lineIdx) lo = mid + 1
-          else hi = mid
-        }
-        return Math.max(0, lo - 1)
-      }
-
-      function clearHits(){
-        if (!commUI) return
-        for (const el of commState.mainEls){
-          el.classList.remove("hit")
-        }
-        for (const el of commState.commEls){
-          el.classList.remove("hit")
-        }
-      }
-
-      function markMainHit(lineIdx){
-        if (!commUI) return
-        const el = commState.mainEls[lineIdx]
-        if (el) el.classList.add("hit")
-      }
-
-      function markCommHit(start, endExcl){
-        if (!commUI) return
-        const n = commState.commEls.length
-        const s = Math.max(0, Math.min(n - 1, start))
-        const e = Math.max(0, Math.min(n, endExcl))
-        for (let i = s; i < e; i++){
-          commState.commEls[i].classList.add("hit")
-        }
-      }
-
-      function scrollCommTo(lineIdx){
-        if (!commUI) return
-        if (commState.needMeasureComm) measureComm()
-        const el = commState.commEls[lineIdx]
-        if (!el) return
-        const top = el.offsetTop - 12
-        commUI.commBody.scrollTo({ top, behavior: "smooth" })
-      }
-
-      function renderLinkedSnippet(start, endExcl){
-        const lines = commState.commLines || []
-        const s = Math.max(0, Math.min(lines.length, start))
-        const e = Math.max(s, Math.min(lines.length, endExcl))
-        const snippet = lines.slice(s, e).join("\n").trim()
-        commUI.commBody.textContent = snippet || "—"
-      }
-
-      function renderCommentaryFull(){
-        const lines = commState.commLines || []
-        let html = ""
         for (let i = 0; i < lines.length; i++){
-          html += `<div class="commLine" data-i="${i}">${escHtml(lines[i])}</div>`
-        }
-        commUI.commBody.innerHTML = html
-        commState.needMeasureComm = true
-        requestAnimationFrame(() => {
-          if (!commUI) return
-          measureComm()
-        })
-      }
+          const line = lines[i]
+          const isBlank = !String(line).trim()
 
-      function syncCommentaryToLine(lineIdx, force){
-        if (!commUI) return
-        if (!commState.active) return
-        if (!commState.selected) return
-        if (!commState.links || !commState.links.length) return
-
-        if (!force && lineIdx === commState.lastMainLine) return
-        commState.lastMainLine = lineIdx
-
-        const li = findLinkIndexByBaseLine(lineIdx)
-        const cur = commState.links[li]
-        const next = commState.links[li + 1]
-
-        if (!cur) return
-
-        const commStart = cur.commLine
-        const commEnd = next ? next.commLine : Math.min(commStart + 30, (commState.commLines || []).length)
-
-        clearHits()
-        markMainHit(cur.baseLine)
-
-        if (commState.mode === "linked"){
-          renderLinkedSnippet(commStart, commEnd)
-        } else {
-          if (!commUI.commBody.querySelector(".commLine")){
-            renderCommentaryFull()
+          if (start === null) {
+            if (isBlank) continue
+            start = i
+            buf.push(line)
+            continue
           }
-          if (commState.needMeasureComm) measureComm()
-          scrollCommTo(commStart)
-          markCommHit(commStart, commEnd)
+
+          if (isBlank) {
+            flush(i - 1)
+          } else {
+            buf.push(line)
+          }
         }
+        flush(lines.length - 1)
+
+        return { lines, paras }
       }
 
-      function syncCommentaryToMain(force){
-        if (!commUI) return
-        if (!commState.active) return
+      function renderPlainTextParagraphs(targetEl, text){
+        const model = buildParagraphModel(text)
+        targetEl.innerHTML = model.paras.map((p) => {
+          return (
+            "<div class=\"para\" data-start=\"" + p.start + "\" data-end=\"" + p.end + "\" id=\"p-" + p.start + "\">" +
+              "<div class=\"paraText\">" + p.html + "</div>" +
+              "<div class=\"tabs\" data-start=\"" + p.start + "\"></div>" +
+              "<div class=\"tabBody\" data-start=\"" + p.start + "\"></div>" +
+            "</div>"
+          )
+        }).join("\n")
 
-        if (commState.raf) return
-        commState.raf = requestAnimationFrame(() => {
-          commState.raf = 0
-          const lineIdx = pickMainLine()
-          syncCommentaryToLine(lineIdx, !!force)
+        targetEl.querySelectorAll(".para").forEach((el) => {
+          el.style.scrollMarginTop = "120px"
         })
+
+        window.__otz_model = model
       }
 
-      async function fetchLibText(path){
-        const url = "/lib/" + encodePath(path)
-        const r = await fetch(url, { cache: "no-cache" })
-        if (!r.ok){
-          throw new Error("Fetch failed: " + r.status + " " + url)
-        }
+      // ---------- Commentaries state ----------
+      let commState = {
+        basePath: "",
+        list: [],
+        selected: [],
+        linksByTitle: new Map(),
+        bookLinesByPath: new Map(),
+      }
+
+      function commStorageKey(basePath){
+        const stem = fileStem(baseNameFromPath(basePath))
+        return "view_comm_sel_" + stem
+      }
+
+      function openCommPicker(){
+        document.getElementById("commOverlay").style.display = "block"
+        document.getElementById("commPicker").classList.add("open")
+      }
+
+      function closeCommPicker(){
+        document.getElementById("commOverlay").style.display = "none"
+        document.getElementById("commPicker").classList.remove("open")
+      }
+
+      async function fetchJson(url){
+        const r = await fetch(url, { cache: "no-store" })
+        if (!r.ok) throw new Error("Fetch failed: " + r.status + "\n" + url)
+        return await r.json()
+      }
+
+      async function fetchText(url){
+        const r = await fetch(url, { cache: "no-store" })
+        if (!r.ok) throw new Error("Fetch failed: " + r.status + "\n" + url)
         return await r.text()
       }
 
-      function setCommsOpen(open){
-        if (!commUI) return
-        commUI.commPanel.style.display = open ? "flex" : "none"
-        commUI.splitWrap.classList.toggle("showComms", !!open)
-        if (open) syncCommentaryToMain(true)
+      function buildLinksIndex(linksArr){
+        const byLine = new Map()
+        for (const it of (linksArr || [])) {
+          const l2 = Number(it && it.line_index_2)
+          if (!Number.isFinite(l2)) continue
+          if (!byLine.has(l2)) byLine.set(l2, [])
+          byLine.get(l2).push(it)
+        }
+        return byLine
       }
 
-      async function loadCommentary(item){
-        if (!commUI) return
-        commState.selected = item
-        commUI.commMeta.textContent = "טוען…"
-        commUI.commBody.textContent = ""
+      async function ensureLinksLoaded(comm){
+        if (commState.linksByTitle.has(comm.title)) return
+        const url = "/lib/" + encodePath(comm.links_path)
+        const links = await fetchJson(url)
+        commState.linksByTitle.set(comm.title, buildLinksIndex(links))
+      }
 
-        const commText = await fetchLibText(item.book_path)
-        commState.commText = commText
-        commState.commLines = splitLines(commText)
+      async function ensureCommentaryBookLoaded(comm){
+        if (commState.bookLinesByPath.has(comm.book_path)) return
+        const url = "/lib/" + encodePath(comm.book_path)
+        const txt = await fetchText(url)
+        const lines = String(txt || "").replaceAll("\r\n","\n").replaceAll("\r","\n").split("\n")
+        commState.bookLinesByPath.set(comm.book_path, lines)
+      }
 
-        const linksText = await fetchLibText(item.links_path)
-        let links
+      function getMatchesForParagraph(byLine, start, end){
+        const matches = []
+        const seen = new Set()
+
+        // יש מאגרים שבהם line_index יכול להיות בהיסט של 1 (0-based/1-based),
+        // לכן אנחנו בודקים גם i וגם i+1 כדי לא "לפספס" קישורים.
+        for (let i = start; i <= end; i++){
+          for (const key of [i, i + 1]) {
+            const arr = byLine.get(key)
+            if (!arr || !arr.length) continue
+            for (const it of arr) {
+              const k = String(it && it.line_index_1) + "|" + String(it && it.line_index_2) + "|" + String(it && it.heRef_2 || "")
+              if (seen.has(k)) continue
+              seen.add(k)
+              matches.push(it)
+            }
+          }
+        }
+        return matches
+      }
+
+      function extractSnippet(lines, idx){
+        const i0 = Math.max(0, idx)
+        let out = []
+        for (let i = i0; i < lines.length; i++){
+          const l = String(lines[i] || "")
+          if (i > i0 && !l.trim()) break
+          out.push(l)
+          if (out.length >= 12) break
+        }
+        if (!out.length){
+          const a = Math.max(0, i0 - 2)
+          const b = Math.min(lines.length - 1, i0 + 6)
+          out = lines.slice(a, b + 1)
+        }
+        return out.join("\n").trim()
+      }
+
+      function renderTabs(){
+        const txtHtml = document.getElementById("txtHtml")
+        const paras = Array.from(txtHtml.querySelectorAll(".para"))
+        const selectedSet = new Set(commState.selected)
+
+        paras.forEach((pEl) => {
+          const start = Number(pEl.getAttribute("data-start"))
+          const end = Number(pEl.getAttribute("data-end"))
+          const tabsEl = pEl.querySelector(".tabs")
+          const bodyEl = pEl.querySelector(".tabBody")
+
+          tabsEl.innerHTML = ""
+          bodyEl.innerHTML = ""
+          tabsEl.classList.remove("open")
+          bodyEl.classList.remove("open")
+
+          const commsHere = []
+          for (const comm of commState.list){
+            if (!selectedSet.has(comm.title)) continue
+            const byLine = commState.linksByTitle.get(comm.title)
+            if (!byLine) continue
+            const matches = getMatchesForParagraph(byLine, start, end)
+            if (matches.length) commsHere.push({ comm, matches })
+          }
+
+          if (!commsHere.length) return
+
+          tabsEl.classList.add("open")
+
+          commsHere.forEach(({ comm, matches }) => {
+            const btn = document.createElement("button")
+            btn.className = "tabBtn"
+            btn.textContent = comm.title
+            btn.onclick = async () => {
+              Array.from(tabsEl.querySelectorAll(".tabBtn")).forEach((b) => b.classList.remove("active"))
+              btn.classList.add("active")
+
+              bodyEl.classList.add("open")
+              bodyEl.innerHTML = "<div class=\"loading\">טוען מפרש…</div>"
+
+              try{
+                await ensureCommentaryBookLoaded(comm)
+                const lines = commState.bookLinesByPath.get(comm.book_path) || []
+
+                const uniq = new Set()
+                const blocks = []
+
+                for (const m of matches){
+                  const ref = String(m && m.heRef_2 ? m.heRef_2 : "").trim()
+                  const li1 = Number(m && m.line_index_1)
+                  if (!Number.isFinite(li1)) continue
+                  const snippet = extractSnippet(lines, li1)
+                  if (!snippet) continue
+
+                  const key = ref + "\n" + snippet
+                  if (uniq.has(key)) continue
+                  uniq.add(key)
+
+                  blocks.push(
+                    "<div class=\"commRef\">" + htmlEscape(ref) + "</div>" +
+                    "<div>" + htmlEscape(snippet).replaceAll("\n","<br>") + "</div>" +
+                    "<hr style=\"border:none;border-top:1px solid #eee;margin:10px 0\">"
+                  )
+                }
+
+                bodyEl.innerHTML = blocks.length ? blocks.join("") : "<div class=\"loading\">אין טקסט להצגה עבור הקטע הזה.</div>"
+              } catch (e) {
+                bodyEl.innerHTML = "<div class=\"err\" style=\"direction:ltr;text-align:left\">" + htmlEscape(String(e && e.message ? e.message : e)) + "</div>"
+              }
+            }
+
+            tabsEl.appendChild(btn)
+          })
+        })
+      }
+
+      async function initCommentariesForBook(basePath){
+        commState.basePath = basePath
+        commState.list = []
+        commState.selected = []
+        commState.linksByTitle = new Map()
+        commState.bookLinesByPath = new Map()
+
+        const btnComms = document.getElementById("btnComms")
+        btnComms.style.display = "none"
+        btnComms.onclick = null
+
+        const apiUrl = "/api/commentaries?path=" + encodeURIComponent(basePath)
+        const data = await fetchJson(apiUrl)
+        const list = (data && data.commentaries) ? data.commentaries : []
+        commState.list = list
+
+        if (!list.length) return
+
+        btnComms.style.display = "inline-block"
+        btnComms.onclick = () => openCommPicker()
+
+        document.getElementById("commOverlay").onclick = () => closeCommPicker()
+        document.getElementById("btnCommClose").onclick = () => closeCommPicker()
+
+        const key = commStorageKey(basePath)
+        let selected = []
         try {
-          links = JSON.parse(linksText)
+          selected = JSON.parse(localStorage.getItem(key) || "[]")
+          if (!Array.isArray(selected)) selected = []
         } catch (_) {
-          links = []
+          selected = []
         }
 
-        const baseFile = commState.baseFile
-        const norm = []
-        for (const e of Array.isArray(links) ? links : []){
-          const commLine = Number(e.line_index_1)
-          const baseLine = Number(e.line_index_2)
-          if (!Number.isFinite(commLine) || !Number.isFinite(baseLine)) continue
+        if (!selected.length) selected = list.slice(0, 3).map((x) => x.title)
 
-          const path2 = String(e.path_2 || e.path2 || "")
-          const type = String(e["Conection Type"] || e["Connection Type"] || e.type || "")
-          norm.push({
-            commLine,
-            baseLine,
-            path2,
-            ref2: String(e.heRef_2 || e.ref_2 || ""),
-            type,
+        commState.selected = selected.filter((t) => list.some((x) => x.title === t))
+
+        const commListEl = document.getElementById("commList")
+        const commHintEl = document.getElementById("commHint")
+        commListEl.innerHTML = ""
+
+        list.forEach((c, idx) => {
+          const id = "comm-" + idx
+          const row = document.createElement("div")
+          row.className = "commItem"
+          row.innerHTML =
+            "<input type=\"checkbox\" id=\"" + id + "\" data-title=\"" + htmlEscape(c.title) + "\">" +
+            "<label for=\"" + id + "\">" + htmlEscape(c.title) + "</label>"
+          commListEl.appendChild(row)
+        })
+
+        const setChecks = (titles) => {
+          const set = new Set(titles)
+          commListEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+            const t = cb.getAttribute("data-title") || ""
+            cb.checked = set.has(t)
           })
         }
 
-        const matching = baseFile ? norm.filter(x => x.path2 === baseFile) : norm
-        const finalLinks = matching.length ? matching : norm
-        finalLinks.sort((a, b) => a.baseLine - b.baseLine)
-        commState.links = finalLinks
+        setChecks(commState.selected)
 
-        commState.mode = String(commUI.commMode.value || "linked")
-        commState.lastMainLine = -1
-        commState.needMeasureComm = true
+        document.getElementById("btnCommAll").onclick = () => setChecks(list.map((x) => x.title))
+        document.getElementById("btnCommNone").onclick = () => setChecks([])
 
-        commUI.btnCommRaw.onclick = () => {
-          const u = "/lib/" + encodePath(item.book_path)
+        document.getElementById("btnCommApply").onclick = async () => {
+          const chosen = []
+          commListEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+            if (cb.checked) chosen.push(cb.getAttribute("data-title") || "")
+          })
+
+          commState.selected = chosen
+          localStorage.setItem(key, JSON.stringify(chosen))
+          closeCommPicker()
+
+          const selectedComms = commState.list.filter((c) => commState.selected.includes(c.title))
+          for (const c of selectedComms){
+            try { await ensureLinksLoaded(c) } catch (_) {}
+          }
+
+          renderTabs()
+        }
+
+        commHintEl.textContent =
+          "טיפ: כדי לחסוך טעינות, הטקסט של המפרש נטען רק כשלוחצים על הטאב שלו."
+
+        const selectedComms = commState.list.filter((c) => commState.selected.includes(c.title))
+        for (const c of selectedComms){
+          try { await ensureLinksLoaded(c) } catch (_) {}
+        }
+
+        renderTabs()
+      }
+
+      // ---------- Export modules ----------
+      // Export logic moved to /public/view/exports/{pdf.js,docx.js,epub.js}
+      // Each module exposes window.OtzariaExportPdf/Docx/Epub.export()
+
+function showExportButtonsForHtmlOrText() {
+        const btnPdf = document.getElementById("btnExportPdf")
+        const btnDocx = document.getElementById("btnExportDocx")
+        const btnEpub = document.getElementById("btnExportEpub")
+
+        btnPdf.style.display = "inline-block"
+        btnPdf.textContent = "ייצוא PDF"
+        btnPdf.onclick = () => (window.OtzariaExportPdf && window.OtzariaExportPdf.export) ? window.OtzariaExportPdf.export() : alert("PDF export module not loaded")
+
+        btnDocx.style.display = "inline-block"
+        btnDocx.textContent = "ייצוא DOCX"
+        btnDocx.onclick = () => (window.OtzariaExportDocx && window.OtzariaExportDocx.export) ? window.OtzariaExportDocx.export() : alert("DOCX export module not loaded")
+
+        btnEpub.style.display = "inline-block"
+        btnEpub.textContent = "ייצוא EPUB"
+        btnEpub.onclick = () => (window.OtzariaExportEpub && window.OtzariaExportEpub.export) ? window.OtzariaExportEpub.export() : alert("EPUB export module not loaded")
+      }
+
+      function showExportButtonsForPdf() {
+        const btnPdf = document.getElementById("btnExportPdf")
+        const btnDocx = document.getElementById("btnExportDocx")
+        const btnEpub = document.getElementById("btnExportEpub")
+
+        btnPdf.style.display = "inline-block"
+        btnPdf.textContent = "הורד PDF"
+        btnPdf.onclick = () => {
+          const u = "/lib/" + encodePath(currentPath)
           window.open(u, "_blank", "noopener,noreferrer")
         }
 
-        const count = finalLinks.length
-        commUI.commMeta.textContent =
-          item.title + " • " + count + " קישורים" + (matching.length ? "" : " (לא מסונן)")
-
-        if (commState.mode === "linked"){
-          commUI.commBody.textContent = "—"
-        } else {
-          renderCommentaryFull()
-        }
-
-        syncCommentaryToMain(true)
-      }
-
-      async function loadCommentariesList(basePath){
-        if (!commUI) return
-
-        commState.active = false
-        commState.basePath = basePath
-        commState.baseFile = String(basePath || "").split("/").pop() || ""
-
-        commUI.btnComms.style.display = "none"
-        commUI.commSel.innerHTML = ""
-        commUI.commMeta.textContent = ""
-        commUI.commBody.textContent = ""
-        commUI.commPanel.style.display = "none"
-        commUI.splitWrap.classList.remove("showComms")
-
-        let data
-        try {
-          const r = await fetch("/api/commentaries?path=" + encodeURIComponent(basePath), { cache: "no-cache" })
-          if (!r.ok) return
-          data = await r.json()
-        } catch (_) {
-          return
-        }
-
-        const list = Array.isArray(data && data.commentaries) ? data.commentaries : []
-        commState.commentaries = list
-        if (!list.length) return
-
-        commUI.btnComms.style.display = "inline-block"
-
-        let opts = ""
-        for (let i = 0; i < list.length; i++){
-          const t = list[i].title || ("מפרש " + (i + 1))
-          opts += `<option value="${i}">${escHtml(t)}</option>`
-        }
-        commUI.commSel.innerHTML = opts
-
-        commUI.commMode.onchange = () => {
-          commState.mode = String(commUI.commMode.value || "linked")
-          commState.lastMainLine = -1
-          commState.needMeasureComm = true
-          if (commState.mode === "page"){
-            renderCommentaryFull()
-          } else {
-            commUI.commBody.textContent = "—"
-          }
-          syncCommentaryToMain(true)
-        }
-
-        commUI.commSel.onchange = async () => {
-          const i = Number(commUI.commSel.value)
-          const item = list[i]
-          if (!item) return
-          await loadCommentary(item)
-        }
-
-        commState.active = true
-        setCommsOpen(true)
-        await loadCommentary(list[0])
-      }
-
-      function buildMainLines(text){
-        if (!commUI) return
-        const lines = splitLines(text)
-        commState.mainLines = lines
-
-        let html = ""
-        for (let i = 0; i < lines.length; i++){
-          html += `<div class="ln" data-i="${i}">${escHtml(lines[i])}</div>`
-        }
-
-        commUI.txtLines.innerHTML = html
-        commState.needMeasure = true
-        requestAnimationFrame(() => {
-          if (!commUI) return
-          measureMain()
-        })
+        btnDocx.style.display = "none"
+        btnEpub.style.display = "none"
       }
 
       async function main(){
         const prefs = loadPrefs()
         applyPrefs(prefs)
+
+        document.getElementById("btnMinus").onclick = () => {
+          const p = loadPrefs()
+          p.fs = clamp(p.fs - 1, 12, 34)
+          savePrefs(p)
+          applyPrefs(p)
+        }
 
         document.getElementById("btnPlus").onclick = () => {
           const p = loadPrefs()
@@ -940,12 +1059,7 @@
           savePrefs(p)
           applyPrefs(p)
         }
-        document.getElementById("btnMinus").onclick = () => {
-          const p = loadPrefs()
-          p.fs = clamp(p.fs - 1, 12, 34)
-          savePrefs(p)
-          applyPrefs(p)
-        }
+
         document.getElementById("btnBook").onclick = () => {
           const p = loadPrefs()
           p.book = !p.book
@@ -953,62 +1067,19 @@
           applyPrefs(p)
         }
 
-        document.getElementById("btnCloseToc").onclick = closeToc
-        document.getElementById("overlay").onclick = closeToc
+        document.getElementById("btnToc").onclick = () => openToc()
+        document.getElementById("btnCloseToc").onclick = () => closeToc()
+        document.getElementById("overlay").onclick = () => closeToc()
 
         const path = getParam("path")
-        currentPath = path
-
+        const meta = document.getElementById("meta")
         const loading = document.getElementById("loading")
         const content = document.getElementById("content")
         const pre = document.getElementById("pre")
         const err = document.getElementById("err")
         const pdf = document.getElementById("pdf")
         const btnRaw = document.getElementById("btnRaw")
-        const btnComms = document.getElementById("btnComms")
-        const splitWrap = document.getElementById("splitWrap")
-        const txtPane = document.getElementById("txtPane")
-        const txtLines = document.getElementById("txtLines")
 
-        const commPanel = document.getElementById("commPanel")
-        const commSel = document.getElementById("commSel")
-        const commMode = document.getElementById("commMode")
-        const commMeta = document.getElementById("commMeta")
-        const commBody = document.getElementById("commBody")
-        const btnCommClose = document.getElementById("btnCommClose")
-        const btnCommRaw = document.getElementById("btnCommRaw")
-
-        commUI = {
-          btnComms,
-          splitWrap,
-          txtPane,
-          txtLines,
-          commPanel,
-          commSel,
-          commMode,
-          commMeta,
-          commBody,
-          btnCommClose,
-          btnCommRaw,
-        }
-
-        // Reset panes
-        btnComms.style.display = "none"
-        splitWrap.style.display = "none"
-        commPanel.style.display = "none"
-        splitWrap.classList.remove("showComms")
-
-        btnComms.onclick = () => {
-          const open = commPanel.style.display === "none"
-          setCommsOpen(open)
-        }
-        btnCommClose.onclick = () => {
-          setCommsOpen(false)
-        }
-
-        txtPane.onscroll = () => {
-          syncCommentaryToMain(false)
-        }
 
         if (!path){
           loading.style.display = "none"
@@ -1017,78 +1088,29 @@
           return
         }
 
+        currentPath = path
+        currentSafeHtml = ""
+        currentPlainText = ""
+        currentTocItems = []
+
+        meta.textContent = "קובץ: " + (String(path).replaceAll("\\", "/").split("/").filter(Boolean).slice(-1)[0] || path)
+
         btnRaw.onclick = () => {
+
           const u = "/lib/" + encodePath(path)
           window.open(u, "_blank", "noopener,noreferrer")
         }
-
-        document.getElementById("btnHome").onclick = () => {
-          location.href = "/"
-        }
-        document.getElementById("btnCatalog").onclick = () => {
-          location.href = "/catalog/"
-        }
-
-        document.getElementById("btnCatalogSearch").onclick = () => {
-          const q = (document.getElementById("catalogSearch").value || "").trim()
-          location.href = "/catalog/?q=" + encodeURIComponent(q)
-        }
-
-        document.getElementById("btnToc").onclick = () => {
-          openToc()
-        }
-
-        document.getElementById("btnExportPdf").onclick = async () => {
-          if (currentSafeHtml){
-            const r = await exportPdfFromHtml(currentSafeHtml)
-            if (r && r.ok){
-              const blob = await r.blob()
-              downloadBlob(blob, "book.pdf")
-              return
-            }
-          }
-          alert("PDF export failed")
-        }
-
-        document.getElementById("btnExportDocx").onclick = async () => {
-          let html = currentSafeHtml
-          if (!html && currentPlainText){
-            html = "<pre>" + escHtml(currentPlainText) + "</pre>"
-          }
-          if (!html){
-            alert("אין תוכן לייצוא")
-            return
-          }
-          const blob = await exportDocxFromHtml(html)
-          if (blob) downloadBlob(blob, "book.docx")
-        }
-
-        document.getElementById("btnExportEpub").onclick = async () => {
-          let html = currentSafeHtml
-          if (!html && currentPlainText){
-            html = "<pre>" + escHtml(currentPlainText) + "</pre>"
-          }
-          if (!html){
-            alert("אין תוכן לייצוא")
-            return
-          }
-          const blob = await exportEpubFromHtml(html)
-          if (blob) downloadBlob(blob, "book.epub")
-        }
-
-        hideExportButtons()
 
         if (isPdf(path)){
           loading.style.display = "none"
           pdf.style.display = "block"
           pdf.src = "/lib/" + encodePath(path)
-          document.getElementById("btnToc").style.display = "none"
-          hideExportButtons()
+          showExportButtonsForPdf()
           return
         }
 
         const url = "/lib/" + encodePath(path)
-        const r = await fetch(url, { cache: "no-cache" })
+        const r = await fetch(url, { cache: "no-store" })
         if (!r.ok){
           loading.style.display = "none"
           err.style.display = "block"
@@ -1105,59 +1127,75 @@
             content.style.display = "block"
             content.innerHTML = safe
             currentSafeHtml = safe
-            currentPlainText = ""
-            splitWrap.style.display = "none"
-            pre.style.display = "none"
-
-            const items = buildTocFromHtml()
-            currentTocItems = items
-            if (items.length){
-              document.getElementById("btnToc").style.display = "inline-block"
-              renderToc(items)
-            } else {
-              document.getElementById("btnToc").style.display = "none"
-            }
-
+            buildNav()
             showExportButtonsForHtmlOrText()
-            return
+          } else {
+            pre.style.display = "block"
+            pre.textContent = text
+            currentPlainText = text
+            currentTocItems = []
+            showExportButtonsForHtmlOrText()
+          }
+        } else {
+          // תמיד נשמור את הטקסט עבור export
+          pre.textContent = text
+          currentPlainText = text
+          currentTocItems = []
+          showExportButtonsForHtmlOrText()
+
+          const enableComms =
+            /\.txt$/i.test(path || "") &&
+            !String(path).includes("/מפרשים/") &&
+            !String(path).includes("/links/")
+
+          if (enableComms) {
+            // תצוגת ספר: מחלקים לפסקאות ומוסיפים טאבים של מפרשים
+            pre.style.display = "none"
+            content.style.display = "none"
+            const txtHtml = document.getElementById("txtHtml")
+            txtHtml.style.display = "block"
+            renderPlainTextParagraphs(txtHtml, text)
+
+            await initCommentariesForBook(path)
+          } else {
+            // Plain text (כמו שהיה)
+            document.getElementById("txtHtml").style.display = "none"
+            pre.style.display = "block"
           }
         }
 
-        // Plain text
-        pre.textContent = text
-        currentPlainText = text
-        currentSafeHtml = ""
-        currentTocItems = []
-        document.getElementById("btnToc").style.display = "none"
-        showExportButtonsForHtmlOrText()
-
-        const enableComms =
-          /\.txt$/i.test(path || "") &&
-          !String(path).includes("/מפרשים/") &&
-          !String(path).includes("/links/")
-
-        if (enableComms){
-          content.style.display = "none"
-          pre.style.display = "none"
-          splitWrap.style.display = "grid"
-
-          buildMainLines(text)
-          await loadCommentariesList(path)
-        } else {
-          splitWrap.style.display = "none"
-          pre.style.display = "block"
-        }
       }
 
-      main().catch(err => {
-        const e = document.getElementById("err")
-        const l = document.getElementById("loading")
-        if (l) l.style.display = "none"
-        if (e){
-          e.style.display = "block"
-          e.textContent = String(err && err.stack ? err.stack : err)
-        }
+      }
+
+      
+function openCatalog(restore) {
+  const q = (document.getElementById("catalogSearch").value || "").trim()
+  const u = new URL("/", location.origin)
+  if (q) u.searchParams.set("q", q)
+  if (restore) u.searchParams.set("restore", "1")
+  location.href = u.toString()
+}
+
+// חיבור כפתורים
+const btnCatalog = document.getElementById("btnCatalog")
+const btnCatalogSearch = document.getElementById("btnCatalogSearch")
+const catalogSearch = document.getElementById("catalogSearch")
+
+btnCatalog.onclick = () => openCatalog(true)
+btnCatalogSearch.onclick = () => openCatalog(false)
+catalogSearch.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") openCatalog(false)
+})
+
+main().catch((e) => {
+        const loading = document.getElementById("loading")
+        const err = document.getElementById("err")
+        loading.style.display = "none"
+        err.style.display = "block"
+        err.textContent = String(e && e.message ? e.message : e)
       })
+    
     </script>
   </body>
 </html>
