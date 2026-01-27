@@ -72,10 +72,6 @@ export async function onRequest(context) {
   const baseFile = safeDecode(parts[parts.length - 1] || "")
   const unitDir = safeDecode(parts[parts.length - 2] || "")
 
-  // bookRoot = folder that contains both unit folders and a "מפרשים" folder.
-  // Example:
-  //   .../משנה תורה/ספר זמנים/<book>.txt
-  //   .../משנה תורה/מפרשים/<commentator>/ספר זמנים/<commentary>.txt
   const bookRoot = parts.slice(0, Math.max(0, parts.length - 2)).join("/") + "/"
   const commentRootPrefix = bookRoot + "מפרשים/"
   const unitNeedle = "/" + unitDir + "/"
@@ -93,8 +89,6 @@ export async function onRequest(context) {
     if (!k.startsWith(commentRootPrefix)) continue
     if (!k.includes(unitNeedle)) continue
 
-    // Heuristic filter: commentaries for the current base book almost always
-    // include the base key (e.g. "הלכות תעניות") in the filename.
     const fileName = k.split("/").pop() || ""
     if (baseKey && !fileName.includes(baseKey)) continue
 
